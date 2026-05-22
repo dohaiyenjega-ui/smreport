@@ -2739,5 +2739,12 @@ p, span, td, th, li, a, label, input, select, textarea, div:not(.chart-card-titl
   text-transform: uppercase !important;
 }
 
+[contenteditable="true"]:focus {
+  outline: 2px solid var(--color-emerald) !important;
+  background-color: var(--bg-tertiary) !important;
+  border-radius: var(--border-radius-sm);
+  box-shadow: 0 0 8px rgba(39, 174, 96, 0.2);
+}
+
 
 

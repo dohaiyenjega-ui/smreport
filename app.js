@@ -4778,7 +4778,7 @@ function renderCommitmentDashboard() {
       `</td>`,
       `<td style="padding:14px 12px; text-align:right; font-weight:800; color:${q.color};">${formatVND(qRetail)}</td>`,
       `<td style="padding:14px 12px; text-align:right; font-weight:800; color:${q.color};">${formatVND(qBusiness)}</td>`,
-      `<td style="padding:14px 12px; text-align:right; font-weight:800; color:var(--color-primary);">${qPerf}%</td>`,
+      `<td style="padding:14px 12px; text-align:right; font-weight:800; color:var(--color-primary);">${qPerf}</td>`,
       `<td style="padding:14px 12px; text-align:right; font-weight:800; color:var(--color-orange);">${qDemo}</td>`,
       `<td style="padding:14px 12px; text-align:center; color:var(--text-muted); font-size:0.75rem;">${isQCollapsed ? '▶ ' + qMonths.length + ' tháng' : ''}</td>`
     ].join('');
@@ -4824,14 +4824,18 @@ function renderCommitmentDashboard() {
           trWeek.innerHTML = [
             `<td style="padding:9px 12px 9px 3.5rem; color:var(--text-secondary);">`,
             `  <div style="display:flex; flex-direction:column; gap:2px;">`,
-            `    <strong style="font-size:0.82rem;">${w.name}</strong>`,
-            `    <span style="font-size:0.72rem; color:var(--text-muted);">${w.startDate} → ${w.endDate}</span>`,
+            `    <strong style="font-size:0.82rem;" contenteditable="true" data-id="${w.id}" data-field="name">${w.name}</strong>`,
+            `    <div style="font-size:0.72rem; color:var(--text-muted); display:flex; gap:4px; align-items:center;">`,
+            `      <span contenteditable="true" data-id="${w.id}" data-field="startDate">${w.startDate}</span>`,
+            `      <span>→</span>`,
+            `      <span contenteditable="true" data-id="${w.id}" data-field="endDate">${w.endDate}</span>`,
+            `    </div>`,
             `  </div>`,
             `</td>`,
-            `<td style="padding:9px 12px; text-align:right; color:var(--text-secondary); font-size:0.83rem;">${formatVND(w.revenueRetail || 0)}</td>`,
-            `<td style="padding:9px 12px; text-align:right; color:var(--text-secondary); font-size:0.83rem;">${formatVND(w.revenueBusiness || 0)}</td>`,
-            `<td style="padding:9px 12px; text-align:right; color:var(--color-primary); font-weight:600; font-size:0.83rem;">${w.perfTarget || 0}</td>`,
-            `<td style="padding:9px 12px; text-align:right; color:var(--color-orange); font-weight:600; font-size:0.83rem;">${w.demoTarget || 0}</td>`,
+            `<td style="padding:9px 12px; text-align:right; color:var(--text-secondary); font-size:0.83rem;" contenteditable="true" data-id="${w.id}" data-field="revenueRetail">${formatVND(w.revenueRetail || 0)}</td>`,
+            `<td style="padding:9px 12px; text-align:right; color:var(--text-secondary); font-size:0.83rem;" contenteditable="true" data-id="${w.id}" data-field="revenueBusiness">${formatVND(w.revenueBusiness || 0)}</td>`,
+            `<td style="padding:9px 12px; text-align:right; color:var(--color-primary); font-weight:600; font-size:0.83rem;" contenteditable="true" data-id="${w.id}" data-field="perfTarget">${w.perfTarget || 0}</td>`,
+            `<td style="padding:9px 12px; text-align:right; color:var(--color-orange); font-weight:600; font-size:0.83rem;" contenteditable="true" data-id="${w.id}" data-field="demoTarget">${w.demoTarget || 0}</td>`,
             `<td style="padding:9px 12px; text-align:center;">`,
             `  <div style="display:flex; gap:0.25rem; justify-content:center; align-items:center;">`,
             `    <button type="button" class="btn-action-small edit" onclick="editCommitmentRow('${w.id}')" title="Sửa tuần"><i data-lucide="edit"></i></button>`,
@@ -4841,6 +4845,9 @@ function renderCommitmentDashboard() {
             `</td>`
           ].join('');
           tbody.appendChild(trWeek);
+          // Attach blur listener for inline editing
+          trWeek.querySelectorAll('[contenteditable="true"]')
+            .forEach(el => el.addEventListener('blur', saveInlineEdit));
         });
       }
     });
@@ -4866,6 +4873,63 @@ function renderCommitmentDashboard() {
   if (q4El) q4El.innerText = formatVND(summary.q4);
 }
 
+function convertDateToISO(dateStr) {
+  if (!dateStr) return "";
+  const parts = dateStr.trim().split(" ")[0].split("/");
+  if (parts.length === 3) {
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    return `${year}-${month}-${day}`;
+  }
+  return dateStr;
+}
+
+function convertISOToDate(isoStr) {
+  if (!isoStr) return "";
+  const parts = isoStr.trim().split("-");
+  if (parts.length === 3) {
+    const year = parts[0];
+    const month = parts[1].padStart(2, '0');
+    const day = parts[2].padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  }
+  return isoStr;
+}
+
+function saveInlineEdit(e) {
+  const el = e.target;
+  const id = el.getAttribute('data-id');
+  const field = el.getAttribute('data-field');
+  if (!id || !field) return;
+  
+  const w = commitmentWeeks.find(week => week.id === id);
+  if (!w) return;
+  
+  let rawVal = el.innerText.trim();
+  
+  if (field === 'name' || field === 'startDate' || field === 'endDate') {
+    if (field === 'startDate' || field === 'endDate') {
+      const datePattern = /^\d{1,2}\/\d{1,2}\/\d{4}$/;
+      if (!datePattern.test(rawVal)) {
+        alert("Định dạng ngày phải là DD/MM/YYYY!");
+        renderCommitmentDashboard();
+        return;
+      }
+    }
+    w[field] = rawVal;
+  } else {
+    let numericString = rawVal.replace(/[^\d]/g, '');
+    let numVal = parseFloat(numericString) || 0;
+    w[field] = numVal;
+  }
+  
+  recalculateCommitmentData();
+  renderCommitmentDashboard();
+  updateKPIs();
+  updateCharts();
+}
+
 function editCommitmentRow(id) {
   const w = commitmentWeeks.find(c => c.id === id);
   if (!w) return;
@@ -4877,8 +4941,8 @@ function editCommitmentRow(id) {
   document.getElementById("comm-month-name").value = m ? m.name : `Tháng ${w.monthIndex + 1}`;
   
   document.getElementById("comm-week-name").value = w.name || "";
-  document.getElementById("comm-start-date").value = w.startDate;
-  document.getElementById("comm-end-date").value = w.endDate;
+  document.getElementById("comm-start-date").value = convertDateToISO(w.startDate);
+  document.getElementById("comm-end-date").value = convertDateToISO(w.endDate);
   document.getElementById("comm-val-retail").value = w.revenueRetail || 0;
   document.getElementById("comm-val-business").value = w.revenueBusiness || 0;
   document.getElementById("comm-val-perf").value = w.perfTarget || 70;
@@ -4930,8 +4994,8 @@ function initCommitmentListeners() {
       
       const parsedWeek = {
         name: document.getElementById("comm-week-name").value,
-        startDate: document.getElementById("comm-start-date").value,
-        endDate: document.getElementById("comm-end-date").value,
+        startDate: convertISOToDate(document.getElementById("comm-start-date").value),
+        endDate: convertISOToDate(document.getElementById("comm-end-date").value),
         revenueRetail: parseFloat(document.getElementById("comm-val-retail").value) || 0,
         revenueBusiness: parseFloat(document.getElementById("comm-val-business").value) || 0,
         perfTarget: parseFloat(document.getElementById("comm-val-perf").value) || 0,
