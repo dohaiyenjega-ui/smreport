@@ -832,43 +832,52 @@ function getPerformanceMetricsForPeriod(startDate, endDate) {
   return { totalDemos, avgPerfRate };
 }
 
-// Helper to compute commitment revenue for a range
+// Helper to compute commitment revenue for a range based on dynamic filter context
 function getCommitmentRevenueForPeriod(startDate, endDate) {
   const start = (typeof startDate === 'string') ? parseDate(startDate) : startDate;
   const end = (typeof endDate === 'string') ? parseDate(endDate) : endDate;
   if (!start || !end) return 0;
 
-  let totalCommitment = 0;
-  
-  // Clone dates to avoid modifying original objects and normalize hours
-  const current = new Date(start.getTime());
-  current.setHours(0, 0, 0, 0);
-  
-  const endLimit = new Date(end.getTime());
-  endLimit.setHours(23, 59, 59, 999);
-  
-  // Pre-calculate daily targets for each month in 2026 to optimize execution speed
-  const monthlyDailyTargets = {};
-  if (typeof commitmentMonths !== 'undefined') {
-    commitmentMonths.forEach(m => {
-      const daysInMonth = new Date(2026, m.monthIndex + 1, 0).getDate();
-      const monthlyTotal = (m.revenueRetail || 0) + (m.revenueBusiness || 0);
-      monthlyDailyTargets[m.monthIndex] = monthlyTotal / daysInMonth;
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+  if (diffDays <= 8) {
+    // 1. Week level
+    const activeWeek = commitmentWeeks.find(w => {
+      const wStart = parseDate(w.startDate);
+      const wEnd = parseDate(w.endDate);
+      if (!wStart || !wEnd) return false;
+      const adjustedEnd = new Date(wEnd);
+      adjustedEnd.setHours(23, 59, 59, 999);
+      return start >= wStart && start <= adjustedEnd;
     });
-  }
-  
-  // Day-by-day iteration over the filtered period (safe and correct for up to a year)
-  while (current <= endLimit) {
-    const year = current.getFullYear();
-    if (year === 2026) {
-      const monthIndex = current.getMonth();
-      const dailyTarget = monthlyDailyTargets[monthIndex] || 0;
-      totalCommitment += dailyTarget;
+    if (activeWeek) {
+      return (activeWeek.revenueRetail || 0) + (activeWeek.revenueBusiness || 0);
     }
-    current.setDate(current.getDate() + 1);
+    // Fallback if not found: find by month index of start date
+    const mIndex = start.getMonth();
+    const weeksInMonth = commitmentWeeks.filter(w => w.monthIndex === mIndex);
+    if (weeksInMonth.length > 0) {
+      const avgRetail = weeksInMonth.reduce((s, w) => s + (w.revenueRetail || 0), 0) / weeksInMonth.length;
+      const avgBusiness = weeksInMonth.reduce((s, w) => s + (w.revenueBusiness || 0), 0) / weeksInMonth.length;
+      return avgRetail + avgBusiness;
+    }
+    return 0;
+  } else if (diffDays <= 35) {
+    // 2. Month level
+    const mIndex = start.getMonth();
+    const mObj = commitmentMonths.find(m => m.monthIndex === mIndex);
+    return mObj ? (mObj.revenueRetail || 0) + (mObj.revenueBusiness || 0) : 0;
+  } else if (diffDays <= 100) {
+    // 3. Quarter level
+    const qIndex = Math.floor(start.getMonth() / 3);
+    const qObj = commitmentQuarters.find(q => q.qIndex === qIndex);
+    return qObj ? (qObj.revenueRetail || 0) + (qObj.revenueBusiness || 0) : 0;
+  } else {
+    // 4. Year level
+    const yObj = commitmentYears[0] || { revenueRetail: 0, revenueBusiness: 0 };
+    return (yObj.revenueRetail || 0) + (yObj.revenueBusiness || 0);
   }
-  
-  return totalCommitment;
 }
 
 // Format trend HTML comparison
@@ -911,6 +920,184 @@ function updateKPIs() {
   prevFromDate.setDate(prevFromDate.getDate() - 7);
   const prevToDate = new Date(toDate);
   prevToDate.setDate(prevToDate.getDate() - 7);
+
+  const diffTime = Math.abs(toDate.getTime() - fromDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+  // Set the main KPI header label based on date filter context
+  const elCommGrowth = document.getElementById("db-kpi-comm-growth-text");
+  if (elCommGrowth) {
+    if (diffDays <= 8) {
+      elCommGrowth.innerText = "Cam kết tuần";
+    } else if (diffDays <= 35) {
+      elCommGrowth.innerText = "Cam kết tháng";
+    } else if (diffDays <= 100) {
+      elCommGrowth.innerText = "Cam kết quý";
+    } else {
+      elCommGrowth.innerText = "Cam kết năm";
+    }
+  }
+
+  // Calculate and Render the fixed 4-level pacing cards
+  let refDate = new Date();
+  if (refDate.getFullYear() !== 2026) {
+    refDate = new Date(2026, 4, 21); // 21/05/2026
+  }
+
+  const pad = (n) => n.toString().padStart(2, '0');
+
+  // 1. Year level
+  const yObj = commitmentYears[0] || { revenueRetail: 0, revenueBusiness: 0 };
+  const yTarget = (yObj.revenueRetail || 0) + (yObj.revenueBusiness || 0);
+  const yActObj = getCommitmentActuals("01/01/2026", "31/12/2026");
+  const yActual = yActObj.retail + yActObj.go + yActObj.business;
+  const yComp = yTarget > 0 ? (yActual / yTarget) * 100 : 0;
+  const yGap = yTarget - yActual;
+
+  // 2. Quarter level
+  const qIndex = Math.floor(refDate.getMonth() / 3);
+  const qObj = commitmentQuarters.find(q => q.qIndex === qIndex) || { revenueRetail: 0, revenueBusiness: 0 };
+  const qTarget = (qObj.revenueRetail || 0) + (qObj.revenueBusiness || 0);
+  const qStartStr = `01/${pad(qIndex * 3 + 1)}/2026`;
+  const qEndStr = `${pad(new Date(2026, (qIndex + 1) * 3, 0).getDate())}/${pad((qIndex + 1) * 3)}/2026`;
+  const qActObj = getCommitmentActuals(qStartStr, qEndStr);
+  const qActual = qActObj.retail + qActObj.go + qActObj.business;
+  const qComp = qTarget > 0 ? (qActual / qTarget) * 100 : 0;
+  const qGap = qTarget - qActual;
+
+  // 3. Month level
+  const mIndex = refDate.getMonth();
+  const mObj = commitmentMonths.find(m => m.monthIndex === mIndex) || { revenueRetail: 0, revenueBusiness: 0 };
+  const mTarget = (mObj.revenueRetail || 0) + (mObj.revenueBusiness || 0);
+  const mStartStr = `01/${pad(mIndex + 1)}/2026`;
+  const mEndStr = `${pad(new Date(2026, mIndex + 1, 0).getDate())}/${pad(mIndex + 1)}/2026`;
+  const mActObj = getCommitmentActuals(mStartStr, mEndStr);
+  const mActual = mActObj.retail + mActObj.go + mActObj.business;
+  const mComp = mTarget > 0 ? (mActual / mTarget) * 100 : 0;
+  const mGap = mTarget - mActual;
+
+  // 4. Week level
+  const activeWeek = commitmentWeeks.find(w => {
+    const start = parseDate(w.startDate);
+    const end = parseDate(w.endDate);
+    if (!start || !end) return false;
+    const adjustedEnd = new Date(end);
+    adjustedEnd.setHours(23, 59, 59, 999);
+    return refDate >= start && refDate <= adjustedEnd;
+  });
+  let wTarget = 0;
+  let wActual = 0;
+  if (activeWeek) {
+    wTarget = (activeWeek.revenueRetail || 0) + (activeWeek.revenueBusiness || 0);
+    const wActObj = getCommitmentActuals(activeWeek.startDate, activeWeek.endDate);
+    wActual = wActObj.retail + wActObj.go + wActObj.business;
+  } else {
+    const fallbackWeeks = commitmentWeeks.filter(w => w.monthIndex === mIndex);
+    if (fallbackWeeks.length > 0) {
+      wTarget = ((mObj.revenueRetail || 0) + (mObj.revenueBusiness || 0)) / fallbackWeeks.length;
+      wActual = mActual / fallbackWeeks.length;
+    }
+  }
+  const wComp = wTarget > 0 ? (wActual / wTarget) * 100 : 0;
+  const wGap = wTarget - wActual;
+
+  // Render pacing HTML
+  const elPacingGrid = document.getElementById("db-commitment-pacing-kpis");
+  if (elPacingGrid) {
+    elPacingGrid.innerHTML = `
+      <!-- Card 1: Year -->
+      <div class="kpi-card glass-card" style="border-left: 4px solid var(--color-gold); background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border-radius: var(--border-radius-md); padding: 1.25rem 1rem; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px;">Tiến độ Năm 2026</span>
+            <span style="background-color: rgba(229, 193, 88, 0.12); color: var(--color-gold); font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Năm</span>
+          </div>
+          <div style="font-size: 1.3rem; font-weight: 800; color: var(--text-primary); margin-bottom: 0.25rem;">
+            ${formatVND(yActual)} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">/ ${formatVND(yTarget)}</span>
+          </div>
+        </div>
+        <div style="margin-top: 0.75rem;">
+           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; margin-bottom: 0.35rem;">
+             <span style="color: var(--text-secondary);">Hoàn thành: <strong style="color: var(--color-gold);">${yComp.toFixed(1)}%</strong></span>
+             <span style="color: var(--text-secondary);">GAP: <strong style="color: ${yGap > 0 ? 'var(--color-red)' : 'var(--color-green)'};">${formatVND(yGap)}</strong></span>
+           </div>
+           <!-- Progress Bar -->
+           <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+             <div style="width: ${Math.min(yComp, 100)}%; height: 100%; background: var(--color-gold); border-radius: 3px;"></div>
+           </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Quarter -->
+      <div class="kpi-card glass-card" style="border-left: 4px solid var(--color-primary); background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border-radius: var(--border-radius-md); padding: 1.25rem 1rem; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px;">Tiến độ Quý ${qIndex + 1}</span>
+            <span style="background-color: rgba(59, 130, 246, 0.12); color: var(--color-primary); font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Quý</span>
+          </div>
+          <div style="font-size: 1.3rem; font-weight: 800; color: var(--text-primary); margin-bottom: 0.25rem;">
+            ${formatVND(qActual)} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">/ ${formatVND(qTarget)}</span>
+          </div>
+        </div>
+        <div style="margin-top: 0.75rem;">
+           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; margin-bottom: 0.35rem;">
+             <span style="color: var(--text-secondary);">Hoàn thành: <strong style="color: var(--color-primary);">${qComp.toFixed(1)}%</strong></span>
+             <span style="color: var(--text-secondary);">GAP: <strong style="color: ${qGap > 0 ? 'var(--color-red)' : 'var(--color-green)'};">${formatVND(qGap)}</strong></span>
+           </div>
+           <!-- Progress Bar -->
+           <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+             <div style="width: ${Math.min(qComp, 100)}%; height: 100%; background: var(--color-primary); border-radius: 3px;"></div>
+           </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Month -->
+      <div class="kpi-card glass-card" style="border-left: 4px solid var(--color-green); background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border-radius: var(--border-radius-md); padding: 1.25rem 1rem; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px;">Tiến độ Tháng ${mIndex + 1}</span>
+            <span style="background-color: rgba(16, 185, 129, 0.12); color: var(--color-green); font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Tháng</span>
+          </div>
+          <div style="font-size: 1.3rem; font-weight: 800; color: var(--text-primary); margin-bottom: 0.25rem;">
+            ${formatVND(mActual)} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">/ ${formatVND(mTarget)}</span>
+          </div>
+        </div>
+        <div style="margin-top: 0.75rem;">
+           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; margin-bottom: 0.35rem;">
+             <span style="color: var(--text-secondary);">Hoàn thành: <strong style="color: var(--color-green);">${mComp.toFixed(1)}%</strong></span>
+             <span style="color: var(--text-secondary);">GAP: <strong style="color: ${mGap > 0 ? 'var(--color-red)' : 'var(--color-green)'};">${formatVND(mGap)}</strong></span>
+           </div>
+           <!-- Progress Bar -->
+           <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+             <div style="width: ${Math.min(mComp, 100)}%; height: 100%; background: var(--color-green); border-radius: 3px;"></div>
+           </div>
+        </div>
+      </div>
+
+      <!-- Card 4: Week -->
+      <div class="kpi-card glass-card" style="border-left: 4px solid var(--color-orange); background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border-radius: var(--border-radius-md); padding: 1.25rem 1rem; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px;">Tiến độ ${activeWeek ? activeWeek.name : 'Tuần hiện tại'}</span>
+            <span style="background-color: rgba(249, 115, 22, 0.12); color: var(--color-orange); font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Tuần</span>
+          </div>
+          <div style="font-size: 1.3rem; font-weight: 800; color: var(--text-primary); margin-bottom: 0.25rem;">
+            ${formatVND(wActual)} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">/ ${formatVND(wTarget)}</span>
+          </div>
+        </div>
+        <div style="margin-top: 0.75rem;">
+           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; margin-bottom: 0.35rem;">
+             <span style="color: var(--text-secondary);">Hoàn thành: <strong style="color: var(--color-orange);">${wComp.toFixed(1)}%</strong></span>
+             <span style="color: var(--text-secondary);">GAP: <strong style="color: ${wGap > 0 ? 'var(--color-red)' : 'var(--color-green)'};">${formatVND(wGap)}</strong></span>
+           </div>
+           <!-- Progress Bar -->
+           <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden;">
+             <div style="width: ${Math.min(wComp, 100)}%; height: 100%; background: var(--color-orange); border-radius: 3px;"></div>
+           </div>
+        </div>
+      </div>
+    `;
+  }
   
   // 1. COLUMN 1 CALCULATIONS (Cam kết & Thực đạt)
   const currentComm = getCommitmentRevenueForPeriod(fromDate, toDate);
@@ -1310,10 +1497,8 @@ function updateCharts() {
   const qIndex = Math.floor(currentMonth / 3);
 
   // 1. Year targets & actuals
-  let yearTarget = 0;
-  commitmentMonths.forEach(m => {
-    yearTarget += (m.revenueRetail || 0) + (m.revenueBusiness || 0);
-  });
+  const yObj = commitmentYears[0] || { revenueRetail: 0, revenueBusiness: 0 };
+  let yearTarget = (yObj.revenueRetail || 0) + (yObj.revenueBusiness || 0);
   const yearActuals = getCommitmentActuals("01/01/2026", "31/12/2026");
   const yearActual = yearActuals.retail + yearActuals.go + yearActuals.business;
 
@@ -1325,12 +1510,8 @@ function updateCharts() {
     { start: "01/10/2026", end: "31/12/2026" }
   ];
   const qRange = qMonths[qIndex];
-  let quarterTarget = 0;
-  commitmentMonths.forEach(m => {
-    if (Math.floor(m.monthIndex / 3) === qIndex) {
-      quarterTarget += (m.revenueRetail || 0) + (m.revenueBusiness || 0);
-    }
-  });
+  const qObj = commitmentQuarters.find(q => q.qIndex === qIndex) || { revenueRetail: 0, revenueBusiness: 0 };
+  let quarterTarget = (qObj.revenueRetail || 0) + (qObj.revenueBusiness || 0);
   const quarterActuals = getCommitmentActuals(qRange.start, qRange.end);
   const quarterActual = quarterActuals.retail + quarterActuals.go + quarterActuals.business;
 
@@ -4397,6 +4578,7 @@ window.selectOkrMonth = selectOkrMonth;
 window.syncOKRsToSheet = syncOKRsToSheet;
 
 // Make Commitment callbacks globally accessible
+window.openEditCommitmentModal = openEditCommitmentModal;
 window.editCommitmentRow = editCommitmentRow;
 window.toggleMonthCollapse = toggleMonthCollapse;
 window.openAddWeekModal = openAddWeekModal;
@@ -4430,7 +4612,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 // ==========================================
 // 13. COMMITMENT 2026 TRACKING MODULE
 // ==========================================
-const COMM_SEED_VERSION = "v7-manual-hierarchical-commitment-weeks-v3";
+const COMM_SEED_VERSION = "v8-independent-commitments-v1";
+let commitmentYears = [];
+let commitmentQuarters = [];
 let commitmentMonths = [];
 let commitmentWeeks = [];
 let collapsedMonths = {};
@@ -4488,55 +4672,88 @@ function generateDefaultWeeksFor2026() {
   return weeks;
 }
 
-function recalculateCommitmentData() {
-  commitmentMonths = [
-    { id: "month-1",  name: "Tháng 1",  monthIndex: 0,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-2",  name: "Tháng 2",  monthIndex: 1,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-3",  name: "Tháng 3",  monthIndex: 2,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-4",  name: "Tháng 4",  monthIndex: 3,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-5",  name: "Tháng 5",  monthIndex: 4,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-6",  name: "Tháng 6",  monthIndex: 5,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-7",  name: "Tháng 7",  monthIndex: 6,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-8",  name: "Tháng 8",  monthIndex: 7,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-9",  name: "Tháng 9",  monthIndex: 8,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-10", name: "Tháng 10", monthIndex: 9,  revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-11", name: "Tháng 11", monthIndex: 10, revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 },
-    { id: "month-12", name: "Tháng 12", monthIndex: 11, revenueRetail: 0, revenueBusiness: 0, perfTarget: 0, demoTarget: 0 }
-  ];
-  
-  commitmentMonths.forEach(m => {
-    const weeksInMonth = commitmentWeeks.filter(w => w.monthIndex === m.monthIndex);
-    if (weeksInMonth.length > 0) {
-      let sumRetail = 0;
-      let sumBusiness = 0;
-      let sumDemo = 0;
-      let sumPerf = 0;
-      
-      weeksInMonth.forEach(w => {
-        sumRetail += parseFloat(w.revenueRetail) || 0;
-        sumBusiness += parseFloat(w.revenueBusiness) || 0;
-        sumDemo += parseInt(w.demoTarget) || 0;
-        sumPerf += parseFloat(w.perfTarget) || 0;
-      });
-      
-      m.revenueRetail = sumRetail;
-      m.revenueBusiness = sumBusiness;
-      m.demoTarget = sumDemo;
-      m.perfTarget = Math.round(sumPerf / weeksInMonth.length);
-    }
-  });
-  
+function saveCommitmentData() {
+  localStorage.setItem('COMMITMENT_YEARS_2026', JSON.stringify(commitmentYears));
+  localStorage.setItem('COMMITMENT_QUARTERS_2026', JSON.stringify(commitmentQuarters));
   localStorage.setItem('COMMITMENT_MONTHS_2026', JSON.stringify(commitmentMonths));
   localStorage.setItem('COMMITMENT_WEEKS_2026', JSON.stringify(commitmentWeeks));
 }
 
+function recalculateCommitmentData() {
+  saveCommitmentData();
+}
+
+function seedDefaultCommitments() {
+  // 1. Year
+  commitmentYears = [{
+    id: "year-2026",
+    name: "Năm 2026",
+    revenueRetail: 3465000000,
+    revenueBusiness: 1340000000,
+    perfTarget: 70,
+    demoTarget: 60,
+    note: "Cam kết chiến lược cả năm 2026"
+  }];
+
+  // 2. Quarters
+  commitmentQuarters = [
+    { id: "quarter-1", name: "Quý 1", qIndex: 0, revenueRetail: 685000000, revenueBusiness: 180000000, perfTarget: 70, demoTarget: 15, note: "Cam kết chiến lược Q1 2026" },
+    { id: "quarter-2", name: "Quý 2", qIndex: 1, revenueRetail: 830000000, revenueBusiness: 290000000, perfTarget: 70, demoTarget: 15, note: "Cam kết chiến lược Q2 2026" },
+    { id: "quarter-3", name: "Quý 3", qIndex: 2, revenueRetail: 930000000, revenueBusiness: 390000000, perfTarget: 70, demoTarget: 15, note: "Cam kết chiến lược Q3 2026" },
+    { id: "quarter-4", name: "Quý 4", qIndex: 3, revenueRetail: 1020000000, revenueBusiness: 480000000, perfTarget: 70, demoTarget: 15, note: "Cam kết chiến lược Q4 2026" }
+  ];
+
+  // 3. Months
+  commitmentMonths = [
+    { id: "month-1",  name: "Tháng 1",  monthIndex: 0,  revenueRetail: 215000000, revenueBusiness: 50000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-2",  name: "Tháng 2",  monthIndex: 1,  revenueRetail: 220000000, revenueBusiness: 60000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-3",  name: "Tháng 3",  monthIndex: 2,  revenueRetail: 250000000, revenueBusiness: 70000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-4",  name: "Tháng 4",  monthIndex: 3,  revenueRetail: 260000000, revenueBusiness: 80000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-5",  name: "Tháng 5",  monthIndex: 4,  revenueRetail: 280000000, revenueBusiness: 100000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-6",  name: "Tháng 6",  monthIndex: 5,  revenueRetail: 290000000, revenueBusiness: 110000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-7",  name: "Tháng 7",  monthIndex: 6,  revenueRetail: 300000000, revenueBusiness: 120000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-8",  name: "Tháng 8",  monthIndex: 7,  revenueRetail: 310000000, revenueBusiness: 130000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-9",  name: "Tháng 9",  monthIndex: 8,  revenueRetail: 320000000, revenueBusiness: 140000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-10", name: "Tháng 10", monthIndex: 9,  revenueRetail: 330000000, revenueBusiness: 150000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-11", name: "Tháng 11", monthIndex: 10, revenueRetail: 340000000, revenueBusiness: 160000000, perfTarget: 70, demoTarget: 5 },
+    { id: "month-12", name: "Tháng 12", monthIndex: 11, revenueRetail: 350000000, revenueBusiness: 170000000, perfTarget: 70, demoTarget: 5 }
+  ];
+
+  // 4. Weeks
+  commitmentWeeks = generateDefaultWeeksFor2026();
+
+  saveCommitmentData();
+}
+
 const storedCommVersion = localStorage.getItem('COMMITMENT_SEED_VER');
-if (localStorage.getItem('COMMITMENT_MONTHS_2026') && localStorage.getItem('COMMITMENT_WEEKS_2026') && storedCommVersion === COMM_SEED_VERSION) {
+if (localStorage.getItem('COMMITMENT_YEARS_2026') && localStorage.getItem('COMMITMENT_QUARTERS_2026') && localStorage.getItem('COMMITMENT_MONTHS_2026') && localStorage.getItem('COMMITMENT_WEEKS_2026') && storedCommVersion === COMM_SEED_VERSION) {
+  commitmentYears = JSON.parse(localStorage.getItem('COMMITMENT_YEARS_2026'));
+  commitmentQuarters = JSON.parse(localStorage.getItem('COMMITMENT_QUARTERS_2026'));
   commitmentMonths = JSON.parse(localStorage.getItem('COMMITMENT_MONTHS_2026'));
   commitmentWeeks = JSON.parse(localStorage.getItem('COMMITMENT_WEEKS_2026'));
 } else {
-  commitmentWeeks = generateDefaultWeeksFor2026();
-  recalculateCommitmentData();
+  // Migrate existing data to keep user's inputs while initializing new years/quarters
+  const existingMonths = localStorage.getItem('COMMITMENT_MONTHS_2026');
+  const existingWeeks = localStorage.getItem('COMMITMENT_WEEKS_2026');
+  
+  seedDefaultCommitments();
+  
+  if (existingMonths) {
+    try {
+      commitmentMonths = JSON.parse(existingMonths);
+    } catch (e) {
+      console.error("Failed to parse existing months:", e);
+    }
+  }
+  if (existingWeeks) {
+    try {
+      commitmentWeeks = JSON.parse(existingWeeks);
+    } catch (e) {
+      console.error("Failed to parse existing weeks:", e);
+    }
+  }
+  
+  saveCommitmentData();
   localStorage.setItem('COMMITMENT_SEED_VER', COMM_SEED_VERSION);
 }
 
@@ -4672,68 +4889,14 @@ function getCommitmentActuals(startDateStr, endDateStr) {
 }
 
 function getCommitmentSummary() {
-  let refDate = new Date();
-  if (refDate.getFullYear() !== 2026) {
-    refDate = new Date(2026, 4, 21); // 21/05/2026
+  const yObj = commitmentYears[0] || { revenueRetail: 0, revenueBusiness: 0 };
+  const yearSum = (yObj.revenueRetail || 0) + (yObj.revenueBusiness || 0);
+  
+  const qSum = [0, 0, 0, 0];
+  for (let i = 0; i < 4; i++) {
+    const qObj = commitmentQuarters[i] || { revenueRetail: 0, revenueBusiness: 0 };
+    qSum[i] = (qObj.revenueRetail || 0) + (qObj.revenueBusiness || 0);
   }
-  
-  // 1. Year target (Total Year = Sum of 4 Quarters = Sum of 12 Months)
-  let yearSum = 0;
-  commitmentMonths.forEach(m => {
-    yearSum += (m.revenueRetail || 0) + (m.revenueBusiness || 0);
-  });
-  
-  // 2. Active Quarter target (Total Quarter = Sum of 3 Months)
-  const qIndex = Math.floor(refDate.getMonth() / 3);
-  let quarterSum = 0;
-  commitmentMonths.forEach(m => {
-    if (Math.floor(m.monthIndex / 3) === qIndex) {
-      quarterSum += (m.revenueRetail || 0) + (m.revenueBusiness || 0);
-    }
-  });
-  
-  let monthSum = 0;
-  const mIndex = refDate.getMonth();
-  const activeMonth = commitmentMonths.find(m => m.monthIndex === mIndex);
-  if (activeMonth) {
-    monthSum = (activeMonth.revenueRetail || 0) + (activeMonth.revenueBusiness || 0);
-  }
-  
-  let weekSum = 0;
-  const activeWeek = commitmentWeeks.find(w => {
-    const start = parseDate(w.startDate);
-    const end = parseDate(w.endDate);
-    if (!start || !end) return false;
-    const adjustedEnd = new Date(end);
-    adjustedEnd.setHours(23, 59, 59, 999);
-    return refDate >= start && refDate <= adjustedEnd;
-  });
-  
-  if (activeWeek) {
-    weekSum = (activeWeek.revenueRetail || 0) + (activeWeek.revenueBusiness || 0);
-  } else {
-    weekSum = monthSum;
-  }
-  
-  return {
-    year: yearSum,
-    quarter: quarterSum,
-    month: monthSum,
-    week: weekSum
-  };
-}
-
-function getCommitmentSummary() {
-  let yearSum = 0;
-  commitmentMonths.forEach(m => {
-    yearSum += (m.revenueRetail || 0) + (m.revenueBusiness || 0);
-  });
-  
-  let qSum = [0, 0, 0, 0];
-  commitmentMonths.forEach(m => {
-    const qIndex = Math.floor(m.monthIndex / 3);
-    qSum[qIndex] += (m.revenueRetail || 0) + (m.revenueBusiness || 0);
-  });
   
   return {
     year: yearSum,
@@ -4760,10 +4923,13 @@ function renderCommitmentDashboard() {
     // ---- QUARTER ROW ----
     const isQCollapsed = collapsedQuarters[q.qIndex] === true;
     const qMonths = commitmentMonths.filter(m => q.months.includes(m.monthIndex));
-    const qRetail = qMonths.reduce((s,m) => s + (m.revenueRetail || 0), 0);
-    const qBusiness = qMonths.reduce((s,m) => s + (m.revenueBusiness || 0), 0);
-    const qPerf = qMonths.length > 0 ? Math.round(qMonths.reduce((s,m) => s + (m.perfTarget || 0), 0) / qMonths.length) : 0;
-    const qDemo = qMonths.reduce((s,m) => s + (m.demoTarget || 0), 0);
+    
+    // Read directly from independent commitmentQuarters
+    const qObj = commitmentQuarters.find(item => item.id === `quarter-${q.qIndex + 1}` || item.qIndex === q.qIndex) || { revenueRetail: 0, revenueBusiness: 0, perfTarget: 70, demoTarget: 15 };
+    const qRetail = qObj.revenueRetail || 0;
+    const qBusiness = qObj.revenueBusiness || 0;
+    const qPerf = qObj.perfTarget || 70;
+    const qDemo = qObj.demoTarget || 15;
 
     const trQ = document.createElement("tr");
     trQ.style.cssText = `background:rgba(255,255,255,0.04); border-top:2px solid ${q.color}; border-bottom:2px solid rgba(255,255,255,0.08);`;
@@ -4780,7 +4946,12 @@ function renderCommitmentDashboard() {
       `<td style="padding:14px 12px; text-align:right; font-weight:800; color:${q.color};">${formatVND(qBusiness)}</td>`,
       `<td style="padding:14px 12px; text-align:right; font-weight:800; color:var(--color-primary);">${qPerf}</td>`,
       `<td style="padding:14px 12px; text-align:right; font-weight:800; color:var(--color-orange);">${qDemo}</td>`,
-      `<td style="padding:14px 12px; text-align:center; color:var(--text-muted); font-size:0.75rem;">${isQCollapsed ? '▶ ' + qMonths.length + ' tháng' : ''}</td>`
+      `<td style="padding:14px 12px; text-align:center;">`,
+      `  <div style="display:flex; gap:0.4rem; justify-content:center; align-items:center;">`,
+      `    <button type="button" class="btn-action-small edit" onclick="openEditCommitmentModal('quarter', '${qObj.id}')" title="Sửa Cam kết ${q.name}"><i data-lucide="edit"></i></button>`,
+      `    <span style="color:var(--text-muted); font-size:0.75rem;">${isQCollapsed ? '▶ ' + qMonths.length + ' tháng' : ''}</span>`,
+      `  </div>`,
+      `</td>`
     ].join('');
     tbody.appendChild(trQ);
 
@@ -4809,9 +4980,12 @@ function renderCommitmentDashboard() {
         `<td style="padding:11px 12px; text-align:right; font-weight:700; color:var(--color-primary);">${m.perfTarget || 0}</td>`,
         `<td style="padding:11px 12px; text-align:right; font-weight:700; color:var(--color-orange);">${m.demoTarget || 0}</td>`,
         `<td style="padding:11px 12px; text-align:center;">`,
-        `  <button type="button" class="btn-emerald btn-action-small" onclick="openAddWeekModal(${m.monthIndex})" title="Thêm tuần mới cho ${m.name}" style="padding: 2px 6px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 2px;">`,
-        `    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Thêm tuần`,
-        `  </button>`,
+        `  <div style="display:flex; gap:0.35rem; justify-content:center; align-items:center;">`,
+        `    <button type="button" class="btn-action-small edit" onclick="openEditCommitmentModal('month', '${m.id}')" title="Sửa Cam kết ${m.name}"><i data-lucide="edit"></i></button>`,
+        `    <button type="button" class="btn-emerald btn-action-small" onclick="openAddWeekModal(${m.monthIndex})" title="Thêm tuần mới cho ${m.name}" style="padding: 2px 6px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 2px;">`,
+        `      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Thêm tuần`,
+        `    </button>`,
+        `  </div>`,
         `</td>`
       ].join('');
       tbody.appendChild(trM);
@@ -4825,10 +4999,10 @@ function renderCommitmentDashboard() {
             `<td style="padding:9px 12px 9px 3.5rem; color:var(--text-secondary);">`,
             `  <div style="display:flex; flex-direction:column; gap:2px;">`,
             `    <strong style="font-size:0.82rem;" contenteditable="true" data-id="${w.id}" data-field="name">${w.name}</strong>`,
-            `    <div style="font-size:0.72rem; color:var(--text-muted); display:flex; gap:4px; align-items:center;">`,
-            `      <span contenteditable="true" data-id="${w.id}" data-field="startDate">${w.startDate}</span>`,
+            `    <div style="font-size:0.72rem; color:var(--text-muted); display:flex; gap:2px; align-items:center;">`,
+            `      <input type="date" value="${convertDateToISO(w.startDate)}" data-id="${w.id}" data-field="startDate" class="inline-date-picker">`,
             `      <span>→</span>`,
-            `      <span contenteditable="true" data-id="${w.id}" data-field="endDate">${w.endDate}</span>`,
+            `      <input type="date" value="${convertDateToISO(w.endDate)}" data-id="${w.id}" data-field="endDate" class="inline-date-picker">`,
             `    </div>`,
             `  </div>`,
             `</td>`,
@@ -4845,9 +5019,11 @@ function renderCommitmentDashboard() {
             `</td>`
           ].join('');
           tbody.appendChild(trWeek);
-          // Attach blur listener for inline editing
+          // Attach blur/change listener for inline editing
           trWeek.querySelectorAll('[contenteditable="true"]')
             .forEach(el => el.addEventListener('blur', saveInlineEdit));
+          trWeek.querySelectorAll('.inline-date-picker')
+            .forEach(el => el.addEventListener('change', saveInlineEdit));
         });
       }
     });
@@ -4906,7 +5082,7 @@ function saveInlineEdit(e) {
   const w = commitmentWeeks.find(week => week.id === id);
   if (!w) return;
   
-  let rawVal = el.innerText.trim();
+  let rawVal = (el.tagName === 'INPUT') ? convertISOToDate(el.value) : el.innerText.trim();
   
   if (field === 'name' || field === 'startDate' || field === 'endDate') {
     if (field === 'startDate' || field === 'endDate') {
@@ -4930,29 +5106,116 @@ function saveInlineEdit(e) {
   updateCharts();
 }
 
-function editCommitmentRow(id) {
-  const w = commitmentWeeks.find(c => c.id === id);
-  if (!w) return;
+function openEditCommitmentModal(level, idOrIdx) {
+  // Set level in hidden input
+  document.getElementById("comm-edit-level").value = level;
   
-  document.getElementById("comm-row-id").value = w.id;
-  document.getElementById("comm-month-index").value = w.monthIndex;
+  // Elements
+  const modalTitle = document.getElementById("comm-edit-modal-title");
+  const submitBtn = document.querySelector("#commitment-edit-form button[type='submit']");
   
-  const m = commitmentMonths.find(c => c.monthIndex === w.monthIndex);
-  document.getElementById("comm-month-name").value = m ? m.name : `Tháng ${w.monthIndex + 1}`;
+  // Fields to toggle
+  const weekNameRow = document.getElementById("comm-week-name").closest(".form-row");
+  const dateRow = document.getElementById("comm-date-row");
+  const noteRow = document.getElementById("comm-week-note-row");
   
-  document.getElementById("comm-week-name").value = w.name || "";
-  document.getElementById("comm-start-date").value = convertDateToISO(w.startDate);
-  document.getElementById("comm-end-date").value = convertDateToISO(w.endDate);
-  document.getElementById("comm-val-retail").value = w.revenueRetail || 0;
-  document.getElementById("comm-val-business").value = w.revenueBusiness || 0;
-  document.getElementById("comm-val-perf").value = w.perfTarget || 70;
-  document.getElementById("comm-val-demo").value = w.demoTarget || 5;
-  document.getElementById("comm-week-note").value = w.note || "";
+  // Toggle visibility and requirements
+  if (level === 'week') {
+    if (weekNameRow) weekNameRow.style.display = 'grid';
+    if (dateRow) dateRow.style.display = 'grid';
+    if (noteRow) noteRow.style.display = 'block';
+    
+    document.getElementById("comm-week-name").required = true;
+    document.getElementById("comm-start-date").required = true;
+    document.getElementById("comm-end-date").required = true;
+  } else {
+    if (weekNameRow) weekNameRow.style.display = 'none';
+    if (dateRow) dateRow.style.display = 'none';
+    if (noteRow) noteRow.style.display = 'none';
+    
+    document.getElementById("comm-week-name").required = false;
+    document.getElementById("comm-start-date").required = false;
+    document.getElementById("comm-end-date").required = false;
+  }
+  
+  // Default values
+  document.getElementById("comm-row-id").value = "";
+  document.getElementById("comm-month-index").value = "";
+  
+  if (level === 'year') {
+    modalTitle.textContent = "Chỉnh sửa Cam kết Năm 2026";
+    if (submitBtn) submitBtn.textContent = "Lưu Cam Kết Năm";
+    
+    const y = commitmentYears[0] || { revenueRetail: 0, revenueBusiness: 0, perfTarget: 70, demoTarget: 60 };
+    document.getElementById("comm-row-id").value = "year-2026";
+    document.getElementById("comm-val-retail").value = y.revenueRetail;
+    document.getElementById("comm-val-business").value = y.revenueBusiness;
+    document.getElementById("comm-val-perf").value = y.perfTarget;
+    document.getElementById("comm-val-demo").value = y.demoTarget;
+    
+  } else if (level === 'quarter') {
+    const q = commitmentQuarters.find(item => item.id === idOrIdx || item.qIndex === parseInt(idOrIdx));
+    if (q) {
+      modalTitle.textContent = `Chỉnh sửa Cam kết ${q.name}`;
+      if (submitBtn) submitBtn.textContent = `Lưu Cam Kết ${q.name}`;
+      
+      document.getElementById("comm-row-id").value = q.id;
+      document.getElementById("comm-val-retail").value = q.revenueRetail;
+      document.getElementById("comm-val-business").value = q.revenueBusiness;
+      document.getElementById("comm-val-perf").value = q.perfTarget;
+      document.getElementById("comm-val-demo").value = q.demoTarget;
+    }
+    
+  } else if (level === 'month') {
+    const m = commitmentMonths.find(item => item.id === idOrIdx || item.monthIndex === parseInt(idOrIdx));
+    if (m) {
+      modalTitle.textContent = `Chỉnh sửa Cam kết ${m.name}`;
+      if (submitBtn) submitBtn.textContent = `Lưu Cam Kết ${m.name}`;
+      
+      document.getElementById("comm-row-id").value = m.id;
+      document.getElementById("comm-month-index").value = m.monthIndex;
+      document.getElementById("comm-val-retail").value = m.revenueRetail;
+      document.getElementById("comm-val-business").value = m.revenueBusiness;
+      document.getElementById("comm-val-perf").value = m.perfTarget;
+      document.getElementById("comm-val-demo").value = m.demoTarget;
+    }
+    
+  } else if (level === 'week') {
+    if (idOrIdx) {
+      // Edit mode
+      const w = commitmentWeeks.find(c => c.id === idOrIdx);
+      if (w) {
+        modalTitle.textContent = "Chỉnh sửa Tuần Cam kết";
+        if (submitBtn) submitBtn.textContent = "Lưu Tuần Cam Kết";
+        
+        document.getElementById("comm-row-id").value = w.id;
+        document.getElementById("comm-month-index").value = w.monthIndex;
+        
+        const m = commitmentMonths.find(c => c.monthIndex === w.monthIndex);
+        document.getElementById("comm-month-name").value = m ? m.name : `Tháng ${w.monthIndex + 1}`;
+        
+        document.getElementById("comm-week-name").value = w.name || "";
+        document.getElementById("comm-start-date").value = convertDateToISO(w.startDate);
+        document.getElementById("comm-end-date").value = convertDateToISO(w.endDate);
+        document.getElementById("comm-val-retail").value = w.revenueRetail || 0;
+        document.getElementById("comm-val-business").value = w.revenueBusiness || 0;
+        document.getElementById("comm-val-perf").value = w.perfTarget || 70;
+        document.getElementById("comm-val-demo").value = w.demoTarget || 5;
+        document.getElementById("comm-week-note").value = w.note || "";
+      }
+    }
+  }
   
   document.getElementById("commitment-edit-modal").classList.add("active");
 }
 
+function editCommitmentRow(id) {
+  openEditCommitmentModal('week', id);
+}
+
 function openAddWeekModal(monthIndex) {
+  openEditCommitmentModal('week', null);
+  
   document.getElementById("comm-row-id").value = "";
   document.getElementById("comm-month-index").value = monthIndex;
   
@@ -4971,7 +5234,8 @@ function openAddWeekModal(monthIndex) {
   document.getElementById("comm-val-demo").value = 5;
   document.getElementById("comm-week-note").value = "";
   
-  document.getElementById("commitment-edit-modal").classList.add("active");
+  const submitBtn = document.querySelector("#commitment-edit-form button[type='submit']");
+  if (submitBtn) submitBtn.textContent = "Thêm Tuần Cam Kết";
 }
 
 function deleteCommitmentWeek(id) {
@@ -4989,49 +5253,83 @@ function initCommitmentListeners() {
   if (commForm) {
     commForm.addEventListener("submit", function(e) {
       e.preventDefault();
+      const level = document.getElementById("comm-edit-level").value;
       const id = document.getElementById("comm-row-id").value;
-      const monthIndex = parseInt(document.getElementById("comm-month-index").value) || 0;
       
-      const parsedWeek = {
-        name: document.getElementById("comm-week-name").value,
-        startDate: convertISOToDate(document.getElementById("comm-start-date").value),
-        endDate: convertISOToDate(document.getElementById("comm-end-date").value),
-        revenueRetail: parseFloat(document.getElementById("comm-val-retail").value) || 0,
-        revenueBusiness: parseFloat(document.getElementById("comm-val-business").value) || 0,
-        perfTarget: parseFloat(document.getElementById("comm-val-perf").value) || 0,
-        demoTarget: parseInt(document.getElementById("comm-val-demo").value) || 0,
-        note: document.getElementById("comm-week-note").value
-      };
-      
-      if (id) {
-        const w = commitmentWeeks.find(c => c.id === id);
-        if (w) {
-          w.name = parsedWeek.name;
-          w.startDate = parsedWeek.startDate;
-          w.endDate = parsedWeek.endDate;
-          w.revenueRetail = parsedWeek.revenueRetail;
-          w.revenueBusiness = parsedWeek.revenueBusiness;
-          w.perfTarget = parsedWeek.perfTarget;
-          w.demoTarget = parsedWeek.demoTarget;
-          w.note = parsedWeek.note;
+      const retailVal = parseFloat(document.getElementById("comm-val-retail").value) || 0;
+      const businessVal = parseFloat(document.getElementById("comm-val-business").value) || 0;
+      const perfVal = parseFloat(document.getElementById("comm-val-perf").value) || 0;
+      const demoVal = parseInt(document.getElementById("comm-val-demo").value) || 0;
+
+      if (level === 'year') {
+        const y = commitmentYears[0] || { id: "year-2026", name: "Năm 2026" };
+        y.revenueRetail = retailVal;
+        y.revenueBusiness = businessVal;
+        y.perfTarget = perfVal;
+        y.demoTarget = demoVal;
+        commitmentYears[0] = y;
+        
+      } else if (level === 'quarter') {
+        const q = commitmentQuarters.find(item => item.id === id);
+        if (q) {
+          q.revenueRetail = retailVal;
+          q.revenueBusiness = businessVal;
+          q.perfTarget = perfVal;
+          q.demoTarget = demoVal;
         }
-      } else {
-        const newWeek = {
-          id: "week-" + Date.now(),
-          monthIndex: monthIndex,
-          name: parsedWeek.name,
-          startDate: parsedWeek.startDate,
-          endDate: parsedWeek.endDate,
-          revenueRetail: parsedWeek.revenueRetail,
-          revenueBusiness: parsedWeek.revenueBusiness,
-          perfTarget: parsedWeek.perfTarget,
-          demoTarget: parsedWeek.demoTarget,
-          note: parsedWeek.note
+        
+      } else if (level === 'month') {
+        const m = commitmentMonths.find(item => item.id === id);
+        if (m) {
+          m.revenueRetail = retailVal;
+          m.revenueBusiness = businessVal;
+          m.perfTarget = perfVal;
+          m.demoTarget = demoVal;
+        }
+        
+      } else if (level === 'week') {
+        const monthIndex = parseInt(document.getElementById("comm-month-index").value) || 0;
+        const parsedWeek = {
+          name: document.getElementById("comm-week-name").value,
+          startDate: convertISOToDate(document.getElementById("comm-start-date").value),
+          endDate: convertISOToDate(document.getElementById("comm-end-date").value),
+          revenueRetail: retailVal,
+          revenueBusiness: businessVal,
+          perfTarget: perfVal,
+          demoTarget: demoVal,
+          note: document.getElementById("comm-week-note").value
         };
-        commitmentWeeks.push(newWeek);
+        
+        if (id) {
+          const w = commitmentWeeks.find(c => c.id === id);
+          if (w) {
+            w.name = parsedWeek.name;
+            w.startDate = parsedWeek.startDate;
+            w.endDate = parsedWeek.endDate;
+            w.revenueRetail = parsedWeek.revenueRetail;
+            w.revenueBusiness = parsedWeek.revenueBusiness;
+            w.perfTarget = parsedWeek.perfTarget;
+            w.demoTarget = parsedWeek.demoTarget;
+            w.note = parsedWeek.note;
+          }
+        } else {
+          const newWeek = {
+            id: "week-" + Date.now(),
+            monthIndex: monthIndex,
+            name: parsedWeek.name,
+            startDate: parsedWeek.startDate,
+            endDate: parsedWeek.endDate,
+            revenueRetail: parsedWeek.revenueRetail,
+            revenueBusiness: parsedWeek.revenueBusiness,
+            perfTarget: parsedWeek.perfTarget,
+            demoTarget: parsedWeek.demoTarget,
+            note: parsedWeek.note
+          };
+          commitmentWeeks.push(newWeek);
+        }
       }
       
-      recalculateCommitmentData();
+      saveCommitmentData();
       
       document.getElementById("commitment-edit-modal").classList.remove("active");
       renderCommitmentDashboard();
@@ -5216,14 +5514,14 @@ function renderAIProjects() {
     
     const formattedStart = proj.startDate ? formatDateString(proj.startDate) : "---";
     const formattedPublish = proj.publishDate ? formatDateString(proj.publishDate) : "---";
-    const textCellStyle = "padding:10px; vertical-align:top; font-size:0.82rem; color:var(--text-secondary); max-width:180px; line-height:1.5;";
+    const textCellStyle = "padding:10px; vertical-align:top; font-size:0.82rem; color:var(--text-secondary); max-width:200px; line-height:1.5; white-space:normal; word-break:break-word;";
     const noDataHtml = '<span style="color:var(--text-muted); font-style:italic;">—</span>';
     
     const row = document.createElement("tr");
     row.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
     row.innerHTML = `
-      <td style="padding:12px 10px; font-weight:700; color:#0f172a; vertical-align:top; min-width:160px;">${proj.name}</td>
-      <td style="padding:12px 10px; color:var(--text-primary); font-weight:600; vertical-align:top; white-space:nowrap;">${proj.owner}</td>
+      <td style="padding:12px 10px; font-weight:700; color:var(--text-primary); vertical-align:top; min-width:140px; max-width:200px; white-space:normal; word-break:break-word;">${proj.name}</td>
+      <td style="padding:12px 10px; color:var(--text-primary); font-weight:600; vertical-align:top; white-space:normal; word-break:break-word; min-width:110px;">${proj.owner}</td>
       <td style="padding:12px 10px; vertical-align:top; min-width:180px;">
         <div class="ai-progress-container">
           <div class="ai-progress-bar-bg">
@@ -5236,8 +5534,8 @@ function renderAIProjects() {
       <td style="${textCellStyle}">${proj.description || noDataHtml}</td>
       <td style="${textCellStyle}">${proj.updateThisWeek || noDataHtml}</td>
       <td style="${textCellStyle}">${proj.planNextWeek || noDataHtml}</td>
-      <td style="padding:12px 10px; text-align:center; color:var(--text-secondary); vertical-align:top; white-space:nowrap;">${formattedStart}</td>
-      <td style="padding:12px 10px; text-align:center; color:var(--text-secondary); vertical-align:top; white-space:nowrap;">${formattedPublish}</td>
+      <td style="padding:12px 10px; text-align:center; color:var(--text-secondary); vertical-align:top; white-space:normal; word-break:break-word; min-width:85px;">${formattedStart}</td>
+      <td style="padding:12px 10px; text-align:center; color:var(--text-secondary); vertical-align:top; white-space:normal; word-break:break-word; min-width:85px;">${formattedPublish}</td>
       <td style="padding:12px 10px; text-align:center; vertical-align:top;">
         <div style="display:flex; justify-content:center; gap:8px;">
           <button class="action-btn" onclick="editAIProject('${proj.id}')" style="background:rgba(59, 130, 246, 0.1); border:none; padding:4px 8px; border-radius:4px; color:#3b82f6; cursor:pointer;" title="Sửa dự án">
@@ -5523,15 +5821,15 @@ function generateExecutiveReport() {
   const currentMonth = refDate.getMonth();
   const qIndex = Math.floor(currentMonth / 3);
 
-  let yearTarget = 0;
-  commitmentMonths.forEach(m => yearTarget += (m.revenueRetail || 0) + (m.revenueBusiness || 0));
+  const yObj = commitmentYears[0] || { revenueRetail: 0, revenueBusiness: 0 };
+  let yearTarget = (yObj.revenueRetail || 0) + (yObj.revenueBusiness || 0);
   const yearActuals = getCommitmentActuals("01/01/2026", "31/12/2026");
   const yearActual = yearActuals.retail + yearActuals.go + yearActuals.business;
 
   const qMonths = [{ start: "01/01/2026", end: "31/03/2026" }, { start: "01/04/2026", end: "30/06/2026" }, { start: "01/07/2026", end: "30/09/2026" }, { start: "01/10/2026", end: "31/12/2026" }];
   const qRange = qMonths[qIndex];
-  let quarterTarget = 0;
-  commitmentMonths.forEach(m => { if (Math.floor(m.monthIndex / 3) === qIndex) quarterTarget += (m.revenueRetail || 0) + (m.revenueBusiness || 0); });
+  const qObj = commitmentQuarters.find(q => q.qIndex === qIndex) || { revenueRetail: 0, revenueBusiness: 0 };
+  let quarterTarget = (qObj.revenueRetail || 0) + (qObj.revenueBusiness || 0);
   const quarterActuals = getCommitmentActuals(qRange.start, qRange.end);
   const quarterActual = quarterActuals.retail + quarterActuals.go + quarterActuals.business;
 

@@ -61,11 +61,11 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: Arial, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
 }
 
 body {
-  font-family: Arial, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   overflow-x: hidden;
@@ -73,6 +73,9 @@ body {
   display: flex;
   font-size: 15px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* Custom Scrollbars */
@@ -286,7 +289,7 @@ body {
   color: var(--text-primary) !important;
   padding: 0.45rem 0.85rem !important;
   border-radius: 6px !important;
-  font-family: Arial, sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-size: 0.82rem !important;
   font-weight: 500 !important;
   outline: none !important;
@@ -2745,6 +2748,53 @@ p, span, td, th, li, a, label, input, select, textarea, div:not(.chart-card-titl
   border-radius: var(--border-radius-sm);
   box-shadow: 0 0 8px rgba(39, 174, 96, 0.2);
 }
+
+/* Premium Inline Date Picker styling */
+.inline-date-picker {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.72rem;
+  padding: 1px 4px;
+  border-radius: var(--border-radius-sm, 4px);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  width: 90px;
+}
+
+.inline-date-picker:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
+.inline-date-picker:focus {
+  outline: 2px solid var(--color-emerald) !important;
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 0 8px rgba(39, 174, 96, 0.2);
+}
+
+/* Customize the Webkit date picker appearance to blend in */
+.inline-date-picker::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.5);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.inline-date-picker:hover::-webkit-calendar-picker-indicator {
+  opacity: 0.8;
+}
+
+/* Ensure all cells in the dashboard AI projects table wrap beautifully */
+#ai-projects-table td, #ai-projects-table th {
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  word-break: break-word !important;
+}
+
+
 
 
 

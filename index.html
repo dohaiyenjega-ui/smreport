@@ -146,6 +146,11 @@
     <!-- SECTION 1: AI DASHBOARD -->
     <section id="section-dashboard" class="page-section active">
       
+      <!-- Khối Tiến độ Cam kết 4 Cấp Cố định -->
+      <div class="commitment-pacing-grid" id="db-commitment-pacing-kpis" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <!-- Render động trong JS -->
+      </div>
+      
       <!-- KPI Stacked 4-Column Grid -->
       <div class="dashboard-kpi-container">
         <!-- Column 1: Cam kết & Thực đạt -->
@@ -952,27 +957,42 @@
       <!-- Commitment Dashboard KPIs -->
       <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.5rem; gap: 1rem;">
         <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
-          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết 2026</div>
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+            <span>Cam kết 2026</span>
+            <button type="button" onclick="openEditCommitmentModal('year')" class="btn-action-small edit" title="Sửa Cam kết Năm 2026" style="background:none; border:none; cursor:pointer; color:var(--color-gold); padding:2px; display:inline-flex; align-items:center; justify-content:center;"><i data-lucide="edit" style="width:13px; height:13px;"></i></button>
+          </div>
           <div class="kpi-value" id="kpi-comm-2026" style="font-size:1.4rem; font-weight:800; color:var(--text-primary); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
           <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tổng cam kết cả năm 2026</div>
         </div>
         <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
-          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết Quý 1</div>
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+            <span>Cam kết Quý 1</span>
+            <button type="button" onclick="openEditCommitmentModal('quarter', 0)" class="btn-action-small edit" title="Sửa Cam kết Quý 1" style="background:none; border:none; cursor:pointer; color:var(--color-gold); padding:2px; display:inline-flex; align-items:center; justify-content:center;"><i data-lucide="edit" style="width:13px; height:13px;"></i></button>
+          </div>
           <div class="kpi-value" id="kpi-comm-q1" style="font-size:1.4rem; font-weight:800; color:var(--color-primary); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
           <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tháng 1, 2, 3</div>
         </div>
         <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
-          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết Quý 2</div>
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+            <span>Cam kết Quý 2</span>
+            <button type="button" onclick="openEditCommitmentModal('quarter', 1)" class="btn-action-small edit" title="Sửa Cam kết Quý 2" style="background:none; border:none; cursor:pointer; color:var(--color-gold); padding:2px; display:inline-flex; align-items:center; justify-content:center;"><i data-lucide="edit" style="width:13px; height:13px;"></i></button>
+          </div>
           <div class="kpi-value" id="kpi-comm-q2" style="font-size:1.4rem; font-weight:800; color:var(--color-green); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
           <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tháng 4, 5, 6</div>
         </div>
         <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
-          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết Quý 3</div>
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+            <span>Cam kết Quý 3</span>
+            <button type="button" onclick="openEditCommitmentModal('quarter', 2)" class="btn-action-small edit" title="Sửa Cam kết Quý 3" style="background:none; border:none; cursor:pointer; color:var(--color-gold); padding:2px; display:inline-flex; align-items:center; justify-content:center;"><i data-lucide="edit" style="width:13px; height:13px;"></i></button>
+          </div>
           <div class="kpi-value" id="kpi-comm-q3" style="font-size:1.4rem; font-weight:800; color:var(--color-orange); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
           <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tháng 7, 8, 9</div>
         </div>
         <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
-          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết Quý 4</div>
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+            <span>Cam kết Quý 4</span>
+            <button type="button" onclick="openEditCommitmentModal('quarter', 3)" class="btn-action-small edit" title="Sửa Cam kết Quý 4" style="background:none; border:none; cursor:pointer; color:var(--color-gold); padding:2px; display:inline-flex; align-items:center; justify-content:center;"><i data-lucide="edit" style="width:13px; height:13px;"></i></button>
+          </div>
           <div class="kpi-value" id="kpi-comm-q4" style="font-size:1.4rem; font-weight:800; color:var(--color-red); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
           <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tháng 10, 11, 12</div>
         </div>
@@ -1726,6 +1746,7 @@ function doOptions(e) {
         <button class="modal-close" id="close-comm-edit-btn">&times;</button>
       </div>
       <form id="commitment-edit-form" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; padding:1.5rem; gap:1rem;">
+        <input type="hidden" id="comm-edit-level" value="week">
         <input type="hidden" id="comm-row-id">
         <input type="hidden" id="comm-month-index">
         
