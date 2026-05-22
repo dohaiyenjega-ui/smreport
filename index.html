@@ -1,0 +1,1983 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Sales Report Dashboard - Trưởng Phòng Kinh Doanh</title>
+  
+  <!-- Font: Inter (Google Fonts - Popular Dashboard Font) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- PapaParse for CSV parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+  <!-- Sidebar Navigation -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <i data-lucide="brain-circuit"></i>
+      <span>JEGA</span> AI Report
+    </div>
+    
+    <ul class="menu-list">
+      <li class="menu-item active" data-section="dashboard">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Tổng quan</span>
+      </li>
+      <li class="menu-item" data-section="leads">
+        <i data-lucide="users"></i>
+        <span>Danh sách khách hàng</span>
+      </li>
+      <li class="menu-item" data-section="orders">
+        <i data-lucide="shopping-bag"></i>
+        <span>Danh sách đơn hàng</span>
+      </li>
+      <li class="menu-item" data-section="key-accounts">
+        <i data-lucide="star"></i>
+        <span>Theo dõi Key Account</span>
+      </li>
+      <li class="menu-item" data-section="renewal-customers">
+        <i data-lucide="repeat"></i>
+        <span>Theo dõi KH tái ký</span>
+      </li>
+      <li class="menu-item" data-section="okr">
+        <i data-lucide="target"></i>
+        <span>Mục tiêu OKR 2026</span>
+      </li>
+      <li class="menu-item" data-section="commitment">
+        <i data-lucide="handshake"></i>
+        <span>Cam kết 2026</span>
+      </li>
+      <li class="menu-item" data-section="ai-projects">
+        <i data-lucide="cpu"></i>
+        <span>Theo dõi dự án AI</span>
+      </li>
+      <li class="menu-item" data-section="system-settings">
+        <i data-lucide="settings"></i>
+        <span>Cài đặt hệ thống</span>
+      </li>
+    </ul>
+    
+    <div class="sidebar-footer">
+      <button class="sync-button" id="open-sync-btn">
+        <i data-lucide="refresh-cw"></i>
+        <span>Đồng bộ dữ liệu</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main id="main-content">
+    
+    <!-- Top Header -->
+    <header class="header-container">
+      <div class="header-title">
+        <h1 id="app-title-display">Tổng quan Báo cáo Kinh doanh & AI Insights</h1>
+        <p id="app-subtitle-display">Dành riêng cho Trưởng phòng kinh doanh | Dữ liệu thực tế từ Google Sheet</p>
+      </div>
+      <div class="header-date" style="text-align: right; font-size: 0.85rem; color: var(--text-secondary);">
+        <i data-lucide="calendar" style="display:inline-block; vertical-align:middle; width:16px; margin-right:4px; color:var(--color-gold);"></i>
+        <span id="current-time-display" style="vertical-align:middle;">20/05/2026</span>
+      </div>
+    </header>
+
+    <!-- Global Interactive Filter Bar -->
+    <section class="filters-bar">
+      <div class="filter-group">
+        <label for="filter-from-date">Từ ngày tạo</label>
+        <input type="date" id="filter-from-date" class="filter-input">
+      </div>
+      <div class="filter-group">
+        <label for="filter-to-date">Đến ngày tạo</label>
+        <input type="date" id="filter-to-date" class="filter-input">
+      </div>
+      <div class="filter-group">
+        <label for="filter-sales">Nhân viên Sales</label>
+        <select id="filter-sales" class="filter-input">
+          <option value="all">Tất cả nhân sự</option>
+          <option value="Nguyễn Trọng Tín">Nguyễn Trọng Tín (tinnt)</option>
+          <option value="Đỗ Thị Hải Yến">Đỗ Thị Hải Yến (yendth)</option>
+          <option value="Lê Thị Hoài Phúc">Lê Thị Hoài Phúc (phuclth)</option>
+          <option value="Phan Ngọc Thúy">Phan Ngọc Thúy (thuypn)</option>
+          <option value="Võ Gia Hân">Võ Gia Hân (hanvg)</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter-product-group">Nhóm sản phẩm</label>
+        <select id="filter-product-group" class="filter-input">
+          <option value="all">Tất cả nhóm SP</option>
+          <option value="cloud">JEGA Cloud</option>
+          <option value="visual">JEGA Visual</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter-product-line">Line sản phẩm</label>
+        <select id="filter-product-line" class="filter-input">
+          <option value="all">Tất cả line</option>
+          <option value="Go">Go</option>
+          <option value="Retail">Retail</option>
+          <option value="Business">Business</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <button class="btn-secondary" id="reset-filters-btn" style="padding: 0.75rem 1.25rem;">
+          <i data-lucide="rotate-ccw" style="width: 16px; margin-right: 4px; display: inline-block; vertical-align: middle;"></i>
+          <span style="vertical-align: middle;">Reset bộ lọc</span>
+        </button>
+        <button class="btn-primary" id="generate-report-btn" style="padding: 0.75rem 1.25rem; background: linear-gradient(135deg, #14B8A6, #0D9488); border: none; color: white; display: flex; align-items: center; gap: 6px; font-weight: 700; border-radius: 8px; cursor: pointer;">
+          <i data-lucide="file-text" style="width: 16px; display: inline-block; vertical-align: middle;"></i>
+          <span style="vertical-align: middle;">Tạo báo cáo</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- SECTION 1: AI DASHBOARD -->
+    <section id="section-dashboard" class="page-section active">
+      
+      <!-- KPI Stacked 4-Column Grid -->
+      <div class="dashboard-kpi-container">
+        <!-- Column 1: Cam kết & Thực đạt -->
+        <div class="kpi-column">
+          <!-- Card 1.1: Doanh thu cam kết -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-gold);">
+            <div class="kpi-header">
+              <span class="kpi-title">Doanh thu cam kết</span>
+              <div class="kpi-icon" style="background-color: rgba(229, 193, 88, 0.1); color: var(--color-gold);">
+                <i data-lucide="handshake"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-comm-revenue">0 ₫</div>
+            <div class="kpi-footer">
+              <span id="db-kpi-comm-growth-text">Cam kết trong kỳ</span>
+            </div>
+          </div>
+          <!-- Card 1.2: Doanh thu thực đạt -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-emerald);">
+            <div class="kpi-header">
+              <span class="kpi-title">Doanh thu thực đạt</span>
+              <div class="kpi-icon" style="background-color: rgba(16, 185, 129, 0.1); color: var(--color-emerald);">
+                <i data-lucide="dollar-sign"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-actual-revenue">0 ₫</div>
+            <div class="kpi-footer" id="db-kpi-actual-footer">
+              <span class="trend-up" id="db-kpi-actual-growth"><i data-lucide="trending-up" style="width:12px; display:inline;"></i> +0%</span>
+              <span>so với tuần trước</span>
+            </div>
+          </div>
+          <!-- Card 1.3: Tỉ lệ hoàn thành -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-blue);">
+            <div class="kpi-header">
+              <span class="kpi-title">Tỉ lệ hoàn thành</span>
+              <div class="kpi-icon" style="background-color: rgba(59, 130, 246, 0.1); color: var(--color-blue);">
+                <i data-lucide="percent"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-completion-rate">0%</div>
+            <div class="kpi-footer" id="db-kpi-completion-footer">
+              <span class="trend-up" id="db-kpi-completion-growth"><i data-lucide="trending-up" style="width:12px; display:inline;"></i> +0%</span>
+              <span>so với tuần trước</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 2: Doanh thu -->
+        <div class="kpi-column">
+          <!-- Card 2.1: Doanh thu Go -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-purple);">
+            <div class="kpi-header">
+              <span class="kpi-title">Doanh thu Go</span>
+              <div class="kpi-icon" style="background-color: rgba(139, 92, 246, 0.1); color: var(--color-purple);">
+                <i data-lucide="zap"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-rev-go">0 ₫</div>
+            <div class="kpi-footer" id="db-kpi-rev-go-footer">
+              <span class="trend-up" id="db-kpi-rev-go-growth"><i data-lucide="trending-up" style="width:12px; display:inline;"></i> +0%</span>
+              <span>so với tuần trước</span>
+            </div>
+          </div>
+          <!-- Card 2.2: Doanh thu Retail -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-orange);">
+            <div class="kpi-header">
+              <span class="kpi-title">Doanh thu Retail</span>
+              <div class="kpi-icon" style="background-color: rgba(249, 115, 22, 0.1); color: var(--color-orange);">
+                <i data-lucide="shopping-cart"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-rev-retail">0 ₫</div>
+            <div class="kpi-footer" id="db-kpi-rev-retail-footer">
+              <span class="trend-up" id="db-kpi-rev-retail-growth"><i data-lucide="trending-up" style="width:12px; display:inline;"></i> +0%</span>
+              <span>so với tuần trước</span>
+            </div>
+          </div>
+          <!-- Card 2.3: Doanh thu Business -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-blue);">
+            <div class="kpi-header">
+              <span class="kpi-title">Doanh thu Business</span>
+              <div class="kpi-icon" style="background-color: rgba(59, 130, 246, 0.1); color: var(--color-blue);">
+                <i data-lucide="briefcase"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-rev-business">0 ₫</div>
+            <div class="kpi-footer" id="db-kpi-rev-business-footer">
+              <span class="trend-up" id="db-kpi-rev-business-growth"><i data-lucide="trending-up" style="width:12px; display:inline;"></i> +0%</span>
+              <span>so với tuần trước</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 3: Hoạt động & Hiệu suất -->
+        <div class="kpi-column">
+          <!-- Card 3.1: Đơn hàng -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-purple);">
+            <div class="kpi-header">
+              <span class="kpi-title">Đơn hàng</span>
+              <div class="kpi-icon" style="background-color: rgba(139, 92, 246, 0.1); color: var(--color-purple);">
+                <i data-lucide="shopping-bag"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-new-orders">0</div>
+            <div class="kpi-footer">
+              <span id="db-kpi-new-orders-desc">Phát sinh trong kỳ</span>
+            </div>
+          </div>
+          <!-- Card 3.2: Demo -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-orange);">
+            <div class="kpi-header">
+              <span class="kpi-title">Demo</span>
+              <div class="kpi-icon" style="background-color: rgba(249, 115, 22, 0.1); color: var(--color-orange);">
+                <i data-lucide="presentation"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-perf-demo">0</div>
+            <div class="kpi-footer">
+              <span id="db-kpi-perf-demo-desc">Tổng từ Performance</span>
+            </div>
+          </div>
+          <!-- Card 3.3: Tỉ lệ chốt sales -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-primary);">
+            <div class="kpi-header">
+              <span class="kpi-title">Tỉ lệ chốt sales</span>
+              <div class="kpi-icon" style="background-color: rgba(192, 57, 43, 0.1); color: var(--color-primary);">
+                <i data-lucide="activity"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-perf-rate">0%</div>
+            <div class="kpi-footer">
+              <span id="db-kpi-perf-rate-desc">Đơn / Demo (Performance)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 4: Lead & Chuyển đổi -->
+        <div class="kpi-column">
+          <!-- Card 4.1: Đơn Nóng -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-blue);">
+            <div class="kpi-header">
+              <span class="kpi-title">Đơn Nóng</span>
+              <div class="kpi-icon" style="background-color: rgba(59, 130, 246, 0.1); color: var(--color-blue);">
+                <i data-lucide="user-plus"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-new-leads">0</div>
+            <div class="kpi-footer" id="db-kpi-new-leads-footer">
+              <span class="trend-up" id="db-kpi-new-leads-growth"><i data-lucide="trending-up" style="width:12px; display:inline;"></i> +0%</span>
+              <span>so với tuần trước</span>
+            </div>
+          </div>
+          <!-- Card 4.2: Demo Nóng -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-primary-light);">
+            <div class="kpi-header">
+              <span class="kpi-title">Demo Nóng</span>
+              <div class="kpi-icon" style="background-color: rgba(232, 89, 10, 0.1); color: var(--color-primary-light);">
+                <i data-lucide="play-circle"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-period-demo">0</div>
+            <div class="kpi-footer" id="db-kpi-period-demo-footer">
+              <span class="trend-up" id="db-kpi-period-demo-growth"><i data-lucide="trending-up" style="width:12px; display:inline;"></i> +0%</span>
+              <span>so với tuần trước</span>
+            </div>
+          </div>
+          <!-- Card 4.3: Tỉ lệ chốt nóng -->
+          <div class="kpi-card mini-card" style="border-left-color: var(--color-green);">
+            <div class="kpi-header">
+              <span class="kpi-title">Tỉ lệ chốt nóng</span>
+              <div class="kpi-icon" style="background-color: rgba(39, 174, 96, 0.1); color: var(--color-green);">
+                <i data-lucide="check-circle"></i>
+              </div>
+            </div>
+            <div class="kpi-value" id="db-kpi-period-signed">0%</div>
+            <div class="kpi-footer" id="db-kpi-period-signed-footer">
+              <span class="trend-up" id="db-kpi-period-signed-growth"><i data-lucide="trending-up" style="width:12px; display:inline;"></i> +0%</span>
+              <span>so với tuần trước</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Insights Strategic Summary Panel -->
+      <div class="ai-report-card">
+        <div class="ai-header">
+          <i data-lucide="sparkles"></i>
+          <span>Trợ Lý Báo Cáo AI - Nhận Xét Chiến Lược</span>
+        </div>
+        <div class="ai-content" id="ai-insights-container">
+          <div class="ai-bullet">
+            <i data-lucide="loader" class="animate-spin" style="color: var(--color-gold);"></i>
+            <span>Đang thu thập và phân tích dữ liệu kinh doanh để tạo nhận xét...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Layout -->
+      <div class="charts-grid">
+
+        <!-- Row of 4 Cumulative Doughnut Pacing Charts (TOP) -->
+        <div class="chart-card col-12" id="card-pacing-doughnuts">
+          <div class="chart-card-title">
+            Tiến độ hoàn thành Doanh thu Cam kết (Luỹ kế 2026)
+            <span>So sánh Doanh thu thực tế vs Mục tiêu Cam kết chiến lược</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; width: 100%; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+            <!-- Pacing Year -->
+            <div style="display:flex; flex-direction:column; align-items:center; text-align:center;">
+              <div style="font-size:0.75rem; font-weight:800; color:#0055ff; margin-bottom:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">Luỹ kế năm</div>
+              <div style="position:relative; width:145px; height:145px; display:flex; justify-content:center; align-items:center;">
+                <canvas id="chart-pacing-year" width="145" height="145"></canvas>
+                <div id="pacing-year-percent" style="position:absolute; font-size:1.5rem; font-weight:900; text-align:center; color:#0055ff;">0%</div>
+              </div>
+              <div style="margin-top:0.75rem; font-size:0.82rem; font-weight:800; color:var(--text-primary); line-height:1.4; display: flex; justify-content: center; align-items: center; gap: 4px;">
+                <span id="pacing-year-actual" style="color:var(--text-primary);">0 ₫</span>
+                <span style="color:var(--text-muted); font-weight:400;">/</span>
+                <span id="pacing-year-target" style="color:var(--text-secondary); font-weight:600;">0 ₫</span>
+              </div>
+            </div>
+            <!-- Pacing Quarter -->
+            <div style="display:flex; flex-direction:column; align-items:center; text-align:center;">
+              <div style="font-size:0.75rem; font-weight:800; color:#ff0033; margin-bottom:0.75rem; text-transform:uppercase; letter-spacing:0.5px;" id="pacing-quarter-title">Luỹ kế Quý</div>
+              <div style="position:relative; width:145px; height:145px; display:flex; justify-content:center; align-items:center;">
+                <canvas id="chart-pacing-quarter" width="145" height="145"></canvas>
+                <div id="pacing-quarter-percent" style="position:absolute; font-size:1.5rem; font-weight:900; text-align:center; color:#ff0033;">0%</div>
+              </div>
+              <div style="margin-top:0.75rem; font-size:0.82rem; font-weight:800; color:var(--text-primary); line-height:1.4; display: flex; justify-content: center; align-items: center; gap: 4px;">
+                <span id="pacing-quarter-actual" style="color:var(--text-primary);">0 ₫</span>
+                <span style="color:var(--text-muted); font-weight:400;">/</span>
+                <span id="pacing-quarter-target" style="color:var(--text-secondary); font-weight:600;">0 ₫</span>
+              </div>
+            </div>
+            <!-- Pacing Month -->
+            <div style="display:flex; flex-direction:column; align-items:center; text-align:center;">
+              <div style="font-size:0.75rem; font-weight:800; color:#00cc44; margin-bottom:0.75rem; text-transform:uppercase; letter-spacing:0.5px;" id="pacing-month-title">Luỹ kế tháng</div>
+              <div style="position:relative; width:145px; height:145px; display:flex; justify-content:center; align-items:center;">
+                <canvas id="chart-pacing-month" width="145" height="145"></canvas>
+                <div id="pacing-month-percent" style="position:absolute; font-size:1.5rem; font-weight:900; text-align:center; color:#00cc44;">0%</div>
+              </div>
+              <div style="margin-top:0.75rem; font-size:0.82rem; font-weight:800; color:var(--text-primary); line-height:1.4; display: flex; justify-content: center; align-items: center; gap: 4px;">
+                <span id="pacing-month-actual" style="color:var(--text-primary);">0 ₫</span>
+                <span style="color:var(--text-muted); font-weight:400;">/</span>
+                <span id="pacing-month-target" style="color:var(--text-secondary); font-weight:600;">0 ₫</span>
+              </div>
+            </div>
+            <!-- Pacing Week -->
+            <div style="display:flex; flex-direction:column; align-items:center; text-align:center;">
+              <div style="font-size:0.75rem; font-weight:800; color:#ff7700; margin-bottom:0.75rem; text-transform:uppercase; letter-spacing:0.5px;" id="pacing-week-title">Luỹ kế tuần</div>
+              <div style="position:relative; width:145px; height:145px; display:flex; justify-content:center; align-items:center;">
+                <canvas id="chart-pacing-week" width="145" height="145"></canvas>
+                <div id="pacing-week-percent" style="position:absolute; font-size:1.5rem; font-weight:900; text-align:center; color:#ff7700;">0%</div>
+              </div>
+              <div style="margin-top:0.75rem; font-size:0.82rem; font-weight:800; color:var(--text-primary); line-height:1.4; display: flex; justify-content: center; align-items: center; gap: 4px;">
+                <span id="pacing-week-actual" style="color:var(--text-primary);">0 ₫</span>
+                <span style="color:var(--text-muted); font-weight:400;">/</span>
+                <span id="pacing-week-target" style="color:var(--text-secondary); font-weight:600;">0 ₫</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- General Conversion Funnel -->
+        <div class="chart-card col-6">
+          <div class="chart-card-title">
+            Tỉ lệ chuyển đổi
+            <span>Thời gian thực | Toàn bộ Lead</span>
+          </div>
+          <div class="funnel-visual-container" id="funnel-display-container">
+            <!-- Rendered Dynamically in JS -->
+          </div>
+        </div>
+
+        <!-- Hot MKT Conversion Funnel -->
+        <div class="chart-card col-6">
+          <div class="chart-card-title">
+            Tỉ lệ chuyển đổi Lead nóng MKT
+            <span>Thời gian thực | Nguồn Marketing Nóng</span>
+          </div>
+          <div class="funnel-visual-container" id="funnel-hot-display-container">
+            <!-- Rendered Dynamically in JS -->
+          </div>
+        </div>
+
+        <!-- Sales Performance Ranking -->
+        <div class="chart-card col-6">
+          <div class="chart-card-title">
+            Bảng xếp hạng Doanh số theo Nhân sự
+            <span>Thực thu đơn hàng</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="chart-sales-ranking"></canvas>
+          </div>
+        </div>
+
+        <!-- Lead Source Breakdown -->
+        <div class="chart-card col-6">
+          <div class="chart-card-title">
+            Cơ cấu Doanh số theo Nhóm Nguồn Khách hàng
+            <span>4 Nhóm nguồn chiến lược</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="chart-source-breakdown"></canvas>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SECTION 2: LEADS LIST -->
+    <section id="section-leads" class="page-section">
+      <!-- 1. Leads Sub-filter Bar (Moved to top, styled elegantly & compact) -->
+      <div class="leads-filters-bar" style="background-color: var(--bg-secondary); border: var(--border-subtle); border-radius: var(--border-radius-lg); padding: 0.75rem 1rem; display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.25rem; box-shadow: var(--shadow-card);">
+        <!-- Top row: Dropdown filters side-by-side -->
+        <div style="display: flex; gap: 0.75rem; width: 100%;">
+          <div class="filter-group" style="flex: 1; margin-bottom: 0; min-width: 120px;">
+            <select id="filter-lead-source" class="filter-input" style="padding: 0.4rem 0.75rem !important; font-size: 0.8rem !important; border-radius: 6px !important;">
+              <option value="all">Tất cả nhóm nguồn</option>
+              <option value="sales">Nhóm Sales</option>
+              <option value="mkt-hot">Nhóm Marketing Nóng</option>
+              <option value="referral">Nhóm Giới thiệu</option>
+              <option value="mkt-other">Nhóm Marketing khác</option>
+            </select>
+          </div>
+          <div class="filter-group" style="flex: 1; margin-bottom: 0; min-width: 120px;">
+            <select id="filter-lead-relation" class="filter-input" style="padding: 0.4rem 0.75rem !important; font-size: 0.8rem !important; border-radius: 6px !important;">
+              <option value="all">Tất cả mối quan hệ</option>
+              <option value="New Lead">New Lead</option>
+              <option value="Quan tâm">Quan tâm</option>
+              <option value="Demo">Demo</option>
+              <option value="Báo giá">Báo giá</option>
+              <option value="Ký hợp đồng">Ký hợp đồng</option>
+              <option value="Rác">Rác / Thất bại</option>
+            </select>
+          </div>
+        </div>
+        <!-- Bottom row: Search bar -->
+        <div class="filter-group" style="width: 100%; margin-bottom: 0;">
+          <div class="search-box" style="position: relative;">
+            <i data-lucide="search" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-secondary);"></i>
+            <input type="text" id="search-leads" class="filter-input" style="padding: 0.4rem 0.75rem 0.4rem 2.25rem !important; font-size: 0.8rem !important; border-radius: 6px !important; width: 100%;" placeholder="Tìm kiếm tên, số ĐT, mã KH, nguồn...">
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. The 3 New Leads KPI Cards -->
+      <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 1.5rem; display: grid; gap: 1.25rem;">
+        <div class="kpi-card" style="margin-bottom: 0; border-left: 4px solid var(--color-blue);">
+          <div class="kpi-header">
+            <span class="kpi-title" style="color: var(--text-secondary); font-weight: 800; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px;">Lead Mới</span>
+            <div class="kpi-icon" style="background-color: rgba(41, 128, 185, 0.1); color: var(--color-blue); width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+              <i data-lucide="user-plus" style="width: 18px; height: 18px;"></i>
+            </div>
+          </div>
+          <div class="kpi-value" id="leads-kpi-new" style="font-weight: 800; font-size: 1.75rem; color: var(--text-primary); margin-top: 0.5rem; margin-bottom: 0.25rem;">0</div>
+          <div class="kpi-footer" style="font-size: 0.72rem; color: var(--text-secondary);">
+            <span id="leads-kpi-new-desc" style="color: var(--color-blue); font-weight: 600;">Đăng ký trong kỳ</span>
+          </div>
+        </div>
+        
+        <div class="kpi-card" style="margin-bottom: 0; border-left: 4px solid var(--color-primary-light);">
+          <div class="kpi-header">
+            <span class="kpi-title" style="color: var(--text-secondary); font-weight: 800; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px;">Demo Nóng</span>
+            <div class="kpi-icon" style="background-color: rgba(232, 89, 10, 0.1); color: var(--color-primary-light); width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+              <i data-lucide="presentation" style="width: 18px; height: 18px;"></i>
+            </div>
+          </div>
+          <div class="kpi-value" id="leads-kpi-demo" style="font-weight: 800; font-size: 1.75rem; color: var(--text-primary); margin-top: 0.5rem; margin-bottom: 0.25rem;">0</div>
+          <div class="kpi-footer" style="font-size: 0.72rem; color: var(--text-secondary);">
+            <span id="leads-kpi-demo-desc" style="color: var(--color-primary-light); font-weight: 600;">Demo Nóng trong kỳ</span>
+          </div>
+        </div>
+        
+        <div class="kpi-card" style="margin-bottom: 0; border-left: 4px solid var(--color-green);">
+          <div class="kpi-header">
+            <span class="kpi-title" style="color: var(--text-secondary); font-weight: 800; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px;">Đơn Nóng</span>
+            <div class="kpi-icon" style="background-color: rgba(39, 174, 96, 0.1); color: var(--color-green); width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+              <i data-lucide="file-signature" style="width: 18px; height: 18px;"></i>
+            </div>
+          </div>
+          <div class="kpi-value" id="leads-kpi-signed" style="font-weight: 800; font-size: 1.75rem; color: var(--text-primary); margin-top: 0.5rem; margin-bottom: 0.25rem;">0</div>
+          <div class="kpi-footer" style="font-size: 0.72rem; color: var(--text-secondary);">
+            <span id="leads-kpi-signed-desc" style="color: var(--color-green); font-weight: 600;">Đơn Nóng trong kỳ</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Customer List Table Container -->
+      <div class="table-card" style="padding-top: 1.25rem;">
+        <div class="table-container">
+          <table id="leads-table">
+            <thead>
+              <tr>
+                <th>Mã KH</th>
+                <th>Tên Khách hàng</th>
+                <th>Ngày Tạo</th>
+                <th>Liên hệ Cuối</th>
+                <th>Điện thoại</th>
+                <th>Nguồn Khách hàng</th>
+                <th>Nhóm nguồn</th>
+                <th>Mối Quan hệ</th>
+                <th>Sales Phụ trách</th>
+              </tr>
+            </thead>
+            <tbody id="leads-table-body">
+              <!-- Rendered Dynamically in JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination-container">
+          <div id="leads-pagination-info">Hiển thị 0 - 0 của 0 khách hàng</div>
+          <div class="pagination-btn-group">
+            <button class="page-btn" id="leads-prev-btn" disabled><i data-lucide="chevron-left" style="width:14px;display:inline;vertical-align:middle;"></i></button>
+            <button class="page-btn" id="leads-next-btn" disabled><i data-lucide="chevron-right" style="width:14px;display:inline;vertical-align:middle;"></i></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: ORDERS LIST -->
+    <section id="section-orders" class="page-section">
+      <div class="table-card">
+        <div class="table-header-bar">
+          <div class="table-title">
+            <i data-lucide="shopping-bag" style="color: var(--color-gold);"></i>
+            <span>Danh Sách Đơn Hàng & Doanh Thu</span>
+          </div>
+          <div class="table-actions">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-orders" class="filter-input" placeholder="Tìm tên KH, mã KH, sản phẩm...">
+            </div>
+            <select id="filter-order-category" class="filter-input" style="max-width: 180px;">
+              <option value="all">Tất cả nhóm sản phẩm</option>
+              <option value="cloud">Nhóm JEGA Cloud</option>
+              <option value="visual">Nhóm JEGA Visual</option>
+            </select>
+            <select id="filter-order-type" class="filter-input" style="max-width: 180px;">
+              <option value="all">Tất cả loại đơn</option>
+              <option value="Ký mới">Ký mới</option>
+              <option value="Tái ký">Tái ký</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table id="orders-table">
+            <thead>
+              <tr>
+                <th>Ngày Mua</th>
+                <th>Mã KH</th>
+                <th>Tên Khách hàng</th>
+                <th>Số Điện thoại</th>
+                <th>Sản Phẩm đã mua</th>
+                <th>Nhóm sản phẩm</th>
+                <th>Doanh Thu</th>
+                <th>Loại Đơn</th>
+                <th>Sales bán hàng</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table-body">
+              <!-- Rendered Dynamically in JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination-container">
+          <div id="orders-pagination-info">Hiển thị 0 - 0 của 0 đơn hàng</div>
+          <div class="pagination-btn-group">
+            <button class="page-btn" id="orders-prev-btn" disabled><i data-lucide="chevron-left" style="width:14px;display:inline;vertical-align:middle;"></i></button>
+            <button class="page-btn" id="orders-next-btn" disabled><i data-lucide="chevron-right" style="width:14px;display:inline;vertical-align:middle;"></i></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: KEY ACCOUNTS TRACKING -->
+    <section id="section-key-accounts" class="page-section">
+      
+      <!-- Key Accounts Custom Premium Header -->
+      <div class="key-accounts-header">
+        <div style="display:flex; flex-direction:column; gap:0.25rem;">
+          <h2><i data-lucide="star" style="color:var(--color-gold);"></i> Theo dõi Khách hàng Key Account</h2>
+          <p style="font-size:0.85rem; color:var(--text-secondary);">Quản lý chiến lược khách hàng lớn, các sản phẩm quan tâm và kế hoạch chăm sóc hàng tuần.</p>
+        </div>
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <button class="btn-emerald" id="open-key-account-sync-btn">
+            <i data-lucide="refresh-cw"></i> Đồng bộ Google Sheet
+          </button>
+          <button class="btn-primary" id="open-add-key-account-btn">
+            <i data-lucide="plus-circle"></i> Thêm Key Account
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Row for Key Accounts -->
+      <div class="kpi-grid" style="margin-bottom:2rem;">
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-title">Tổng số Key Account</span>
+            <div class="kpi-icon" style="background-color: rgba(229, 193, 88, 0.1); color: var(--color-gold);">
+              <i data-lucide="shield"></i>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-ka-total">0</div>
+          <div class="kpi-footer">Khách hàng lớn đang chăm sóc</div>
+        </div>
+        
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-title">Key Account Rất Tiềm Năng</span>
+            <div class="kpi-icon" style="background-color: rgba(16, 185, 129, 0.1); color: var(--color-emerald);">
+              <i data-lucide="star"></i>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-ka-potential">0</div>
+          <div class="kpi-footer">Độ tiềm năng được đánh giá từ 4-5 sao</div>
+        </div>
+        
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-title">Đã Ký Hợp Đồng (KA)</span>
+            <div class="kpi-icon" style="background-color: rgba(59, 130, 246, 0.1); color: var(--color-blue);">
+              <i data-lucide="award"></i>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-ka-signed">0</div>
+          <div class="kpi-footer">Hợp đồng Key Account thành công</div>
+        </div>
+      </div>
+
+      <!-- Master Interactive Table Grid -->
+      <div class="table-card">
+        <div class="table-header-bar">
+          <div class="table-title">
+            <i data-lucide="award" style="color: var(--color-gold);"></i>
+            <span>Bảng Theo Dõi Khách Hàng Key Account</span>
+          </div>
+          <div class="table-actions">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-key-accounts" class="filter-input" placeholder="Tìm kiếm tên, sản phẩm, cập nhật...">
+            </div>
+            <select id="filter-ka-stage" class="filter-input" style="max-width: 220px;">
+              <option value="all">Tất cả giai đoạn tư vấn</option>
+              <option value="Nhận thông tin">1. Nhận thông tin</option>
+              <option value="Đang tư vấn">2. Đang tư vấn</option>
+              <option value="Đang demo/trial">3. Đang demo/trial</option>
+              <option value="Báo giá">4. Báo giá</option>
+              <option value="Ký hợp đồng">5. Ký hợp đồng</option>
+              <option value="Chăm sóc sau bán">6. Chăm sóc sau bán</option>
+              <option value="Tạm dừng">7. Tạm dừng</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table id="key-accounts-table">
+            <thead>
+              <tr>
+                <th style="min-width: 170px;">Tên khách hàng</th>
+                <th style="min-width: 190px;">Sản phẩm quan tâm</th>
+                <th style="min-width: 140px;">Giai đoạn tư vấn</th>
+                <th style="min-width: 110px;">Độ tiềm năng</th>
+                <th style="min-width: 180px;">Cập nhật tuần này</th>
+                <th style="min-width: 180px;">Kế hoạch tuần sau</th>
+                <th style="min-width: 180px;">Vấn đề / Khó khăn</th>
+                <th style="min-width: 140px; text-align: center;">Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="key-accounts-table-body">
+              <!-- Rendered Dynamically in JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- SECTION 4B: RENEWAL CUSTOMERS TRACKING -->
+    <section id="section-renewal-customers" class="page-section">
+      <!-- Header -->
+      <div class="key-accounts-header">
+        <div style="display:flex; flex-direction:column; gap:0.25rem;">
+          <h2><i data-lucide="repeat" style="color:var(--color-primary-light);"></i> Thống kê Khách hàng Tái ký</h2>
+          <p style="font-size:0.85rem; color:var(--text-secondary);">Thống kê số lượng khách hàng hết hạn và lý do không tái ký.</p>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="leads-filters-bar" style="background-color: var(--bg-secondary); border: var(--border-subtle); border-radius: var(--border-radius-lg); padding: 1rem; display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+        <div class="filter-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+          <label for="filter-renew-sales" style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Nhân viên kinh doanh</label>
+          <select id="filter-renew-sales" class="filter-input" style="width: 100%;">
+            <option value="all">Tất cả nhân viên</option>
+            <option value="Nguyễn Trọng Tín">Nguyễn Trọng Tín</option>
+            <option value="Đỗ Thị Hải Yến">Đỗ Thị Hải Yến</option>
+            <option value="Lê Thị Hoài Phúc">Lê Thị Hoài Phúc</option>
+            <option value="Phan Ngọc Thúy">Phan Ngọc Thúy</option>
+            <option value="Võ Gia Hân">Võ Gia Hân</option>
+          </select>
+        </div>
+        <div class="filter-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+          <label for="filter-renew-status" style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Tình trạng</label>
+          <select id="filter-renew-status" class="filter-input" style="width: 100%;">
+            <option value="all">Tất cả tình trạng</option>
+            <option value="Sắp hết hạn">Sắp hết hạn</option>
+            <option value="Đang sử dụng">Đang sử dụng</option>
+            <option value="Không tái ký">Không tái ký</option>
+          </select>
+        </div>
+        <div class="filter-group" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+          <label for="filter-renew-reason" style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Lý do không tái ký</label>
+          <select id="filter-renew-reason" class="filter-input" style="width: 100%;">
+            <option value="all">Tất cả lý do</option>
+            <option value="Không sử dụng từ lúc mua">Không sử dụng từ lúc mua</option>
+            <option value="Không đáp ứng chất lượng render">Không đáp ứng chất lượng render</option>
+            <option value="Không đáp ứng tính năng thiết kế">Không đáp ứng tính năng thiết kế</option>
+            <option value="Khó sử dụng">Khó sử dụng</option>
+            <option value="CSKH không tốt">CSKH không tốt</option>
+            <option value="Thay đổi ngành nghề">Thay đổi ngành nghề</option>
+            <option value="Thay đổi nhân sự">Thay đổi nhân sự</option>
+            <option value="Không có dự án">Không có dự án</option>
+            <option value="Không liên hệ được">Không liên hệ được</option>
+            <option value="Lý do khác">Lý do khác</option>
+          </select>
+        </div>
+        <div class="filter-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
+          <label for="filter-renew-from" style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Từ ngày</label>
+          <input type="date" id="filter-renew-from" class="filter-input" style="width: 100%;">
+        </div>
+        <div class="filter-group" style="flex: 1; min-width: 140px; margin-bottom: 0;">
+          <label for="filter-renew-to" style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Đến ngày</label>
+          <input type="date" id="filter-renew-to" class="filter-input" style="width: 100%;">
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div style="margin-bottom: 1.5rem;">
+        <div class="okr-quarter-tabs" style="margin: 0; border-bottom: 1px solid #cbd5e1; padding-bottom: 0; gap: 1rem; border-radius: 0; background: transparent; display: flex;">
+          <button class="okr-tab active" id="tab-btn-renew-expired" onclick="switchRenewTab('expired')" style="padding: 0.75rem 1.5rem; border-radius: 8px 8px 0 0; background: #fff; border: 1px solid #cbd5e1; border-bottom: none; font-weight: 800; color: var(--color-primary-light); cursor: pointer;">Khách hàng Hết hạn</button>
+          <button class="okr-tab" id="tab-btn-renew-reasons" onclick="switchRenewTab('reasons')" style="padding: 0.75rem 1.5rem; border-radius: 8px 8px 0 0; background: #f8fafc; border: 1px solid transparent; border-bottom: none; font-weight: 600; color: var(--text-secondary); cursor: pointer;">Lý do KH không tái ký</button>
+        </div>
+      </div>
+
+      <!-- Tab Content 1: Khách hàng hết hạn -->
+      <div id="tab-content-renew-expired" style="display: block;">
+        
+        <!-- Table 2025 -->
+        <div class="table-card" style="margin-bottom: 2rem;">
+          <div class="table-header-bar" style="background-color: rgba(99, 102, 241, 0.05);">
+            <div class="table-title">
+              <i data-lucide="calendar" style="color: var(--color-blue);"></i>
+              <span style="color: var(--color-blue);">Khách hàng hết hạn năm 2025</span>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto;">
+            <table id="table-renew-2025" style="width: 100%; border-collapse: collapse; min-width: 800px;">
+              <thead style="background-color: #f8fafc;">
+                <tr>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: left; width: 160px;">Thời gian</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Sắp hết hạn</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Đang sử dụng</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Không tái ký</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Tổng hết hạn</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center; background-color: rgba(16, 185, 129, 0.1); color: var(--color-green);">Đã tái ký (Thực tế)</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-renew-2025">
+                <!-- JS injected -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Table 2026 -->
+        <div class="table-card" style="margin-bottom: 2rem;">
+          <div class="table-header-bar" style="background-color: rgba(245, 158, 11, 0.05);">
+            <div class="table-title">
+              <i data-lucide="calendar" style="color: var(--color-gold);"></i>
+              <span style="color: var(--color-gold);">Khách hàng hết hạn năm 2026</span>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto;">
+            <table id="table-renew-2026" style="width: 100%; border-collapse: collapse; min-width: 800px;">
+              <thead style="background-color: #f8fafc;">
+                <tr>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: left; width: 160px;">Thời gian</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Sắp hết hạn</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Đang sử dụng</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Không tái ký</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Tổng hết hạn</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center; background-color: rgba(16, 185, 129, 0.1); color: var(--color-green);">Đã tái ký (Thực tế)</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-renew-2026">
+                <!-- JS injected -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Lý do không tái ký -->
+      <div id="tab-content-renew-reasons" style="display: none;">
+        <div class="table-card">
+          <div class="table-header-bar" style="background-color: rgba(239, 68, 68, 0.05);">
+            <div class="table-title">
+              <i data-lucide="pie-chart" style="color: var(--color-primary);"></i>
+              <span style="color: var(--color-primary);">Thống kê Lý do Không Tái ký</span>
+            </div>
+          </div>
+          <div class="table-container">
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead style="background-color: #f8fafc;">
+                <tr>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: left;">Lý do không tái ký</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center; width: 150px;">Số lượng KH</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center; width: 150px;">Tỷ lệ (%)</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-renew-reasons">
+                <!-- JS injected -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- SECTION 5: OKR 2026 TRACKING -->
+    <section id="section-okr" class="page-section">
+      <!-- OKR Luxury Title -->
+      <div class="okr-title-wrapper">
+        <h1 class="okr-main-title"><i data-lucide="target" style="color:var(--color-primary-light); margin-right: 8px; vertical-align: middle;"></i>Mục tiêu & Kết quả Then chốt (OKR) năm 2026</h1>
+        <p class="okr-subtitle">Chiến dịch OKR theo quý với mục tiêu chiến lược và kết quả then chốt đo lường được</p>
+      </div>
+
+      <!-- OKR Toolbar -->
+      <div class="okr-header" style="justify-content: flex-end; margin-bottom: 1.5rem;">
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <button class="btn-emerald" id="open-okr-sync-btn">
+            <i data-lucide="refresh-cw"></i> Đồng bộ Google Sheet
+          </button>
+          <button class="btn-primary" id="open-add-objective-btn">
+            <i data-lucide="plus-circle"></i> Thêm Objective
+          </button>
+        </div>
+      </div>
+
+      <!-- OKR Quarter and Month Filtering Bar -->
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 2rem; background: #FFFFFF; padding: 1rem 1.25rem; border-radius: var(--border-radius-md); border: 1px solid #E2EBF0; box-shadow: 0 4px 12px rgba(0,0,0,0.01);">
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1; min-width: 250px;">
+          <span style="font-size: 0.75rem; font-weight: 800; color: #000000 !important; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
+            <i data-lucide="calendar" style="width: 14px; height: 14px; color: var(--color-primary);"></i> Bộ lọc Quý thực hiện:
+          </span>
+          <div class="okr-quarter-tabs" style="margin: 0; border: none; padding: 0; gap: 0.5rem;">
+            <button class="okr-tab" data-quarter="Q1" onclick="selectOkrQuarter('Q1')">Quý 1 (Tháng 1 - 3)</button>
+            <button class="okr-tab" data-quarter="Q2" onclick="selectOkrQuarter('Q2')">Quý 2 (Tháng 4 - 6)</button>
+            <button class="okr-tab" data-quarter="Q3" onclick="selectOkrQuarter('Q3')">Quý 3 (Tháng 7 - 9)</button>
+            <button class="okr-tab" data-quarter="Q4" onclick="selectOkrQuarter('Q4')">Quý 4 (Tháng 10 - 12)</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1; min-width: 250px;">
+          <span style="font-size: 0.75rem; font-weight: 800; color: #000000 !important; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
+            <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--color-primary);"></i> Hành động & Phân rã theo Tháng:
+          </span>
+          <div class="okr-quarter-tabs" id="okr-months-tabs-container" style="margin: 0; border: none; padding: 0; gap: 0.5rem;">
+            <!-- Month tabs populated dynamically in JS based on selected Quarter -->
+          </div>
+        </div>
+      </div>
+
+      <!-- OKR Objectives KPI Cards (Dynamic) -->
+      <div class="kpi-grid" id="okr-objectives-kpi-cards" style="margin-bottom:2rem;">
+        <!-- Rendered Dynamically in JS based on actual Objectives -->
+      </div>
+
+      <!-- OKR Interactive Content Tree Area -->
+      <div id="okr-tree-container">
+        <!-- Rendered Dynamically in JS -->
+      </div>
+    </section>
+
+    <!-- SECTION 6: COMMITMENT 2026 TRACKING -->
+    <section id="section-commitment" class="page-section">
+      <!-- Commitment Header -->
+      <div class="okr-header">
+        <div style="display:flex; flex-direction:column; gap:0.25rem;">
+          <h2 style="color:#0f172a; font-weight:800;"><i data-lucide="handshake" style="color:var(--color-gold);"></i> Cam kết & Hiệu suất bán hàng năm 2026</h2>
+        </div>
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <button class="btn-emerald" id="btn-add-commitment-week" style="display:none;" onclick="openAddWeekModal()">
+            <i data-lucide="plus-circle"></i> Thêm tuần mới
+          </button>
+          <button class="btn-primary" id="export-commitment-excel-btn">
+            <i data-lucide="download"></i> Xuất Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- Commitment Dashboard KPIs -->
+      <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.5rem; gap: 1rem;">
+        <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết 2026</div>
+          <div class="kpi-value" id="kpi-comm-2026" style="font-size:1.4rem; font-weight:800; color:var(--text-primary); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
+          <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tổng cam kết cả năm 2026</div>
+        </div>
+        <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết Quý 1</div>
+          <div class="kpi-value" id="kpi-comm-q1" style="font-size:1.4rem; font-weight:800; color:var(--color-primary); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
+          <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tháng 1, 2, 3</div>
+        </div>
+        <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết Quý 2</div>
+          <div class="kpi-value" id="kpi-comm-q2" style="font-size:1.4rem; font-weight:800; color:var(--color-green); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
+          <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tháng 4, 5, 6</div>
+        </div>
+        <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết Quý 3</div>
+          <div class="kpi-value" id="kpi-comm-q3" style="font-size:1.4rem; font-weight:800; color:var(--color-orange); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
+          <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tháng 7, 8, 9</div>
+        </div>
+        <div class="kpi-card" style="background:#FFFFFF; border:1px solid #E2EBF0; border-radius:var(--border-radius-md); padding:1rem; box-shadow:0 4px 15px rgba(0, 0, 0, 0.01);">
+          <div class="kpi-title" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:700;">Cam kết Quý 4</div>
+          <div class="kpi-value" id="kpi-comm-q4" style="font-size:1.4rem; font-weight:800; color:var(--color-red); margin-top:0.25rem; margin-bottom:0.25rem;">0 ₫</div>
+          <div class="kpi-footer" style="font-size:0.68rem; color:var(--text-muted); font-weight:500;">Tháng 10, 11, 12</div>
+        </div>
+      </div>
+
+      <!-- Comparative Table Card -->
+      <div class="data-card" style="margin-top: 1rem;">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:1rem; margin-bottom:1rem;">
+          <h3 style="font-size:1.1rem; color:var(--color-gold); font-weight:700;" id="commitment-table-title"><i data-lucide="table" style="width:16px; margin-right:4px;"></i> Bảng theo dõi Cam kết Doanh thu 2026</h3>
+        </div>
+        
+        <div class="table-responsive" style="overflow-x:auto;">
+          <table class="data-table" style="width:100%; border-collapse:collapse; text-align:left; font-size:0.85rem;" id="commitment-tree-table">
+            <thead>
+              <tr style="background-color:var(--bg-tertiary);" id="commitment-table-header">
+                <th style="padding:10px 12px; min-width:200px;">Quý / Tháng / Tuần</th>
+                <th style="padding:10px; text-align:right;">Cam kết Retail</th>
+                <th style="padding:10px; text-align:right;">Cam kết Business</th>
+                <th style="padding:10px; text-align:right;">Chỉ tiêu Hiệu suất</th>
+                <th style="padding:10px; text-align:right;">Chỉ tiêu Demo</th>
+                <th style="padding:10px; text-align:center;">Ghi chú / Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="commitment-rows-container">
+              <!-- Rendered dynamically in JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    </section>
+
+    <!-- SECTION 7: AI PROJECTS TRACKING -->
+    <section id="section-ai-projects" class="page-section">
+      <!-- AI Projects Header -->
+      <div class="okr-header">
+        <div style="display:flex; flex-direction:column; gap:0.25rem;">
+          <h2 style="color:#000000; font-weight:800;"><i data-lucide="cpu" style="color:#000000;"></i> Theo dõi Dự án AI</h2>
+        </div>
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <button class="btn-primary" id="add-ai-project-btn" style="background: linear-gradient(135deg, #14B8A6, #0D9488); border: none; color: white; display: flex; align-items: center; gap: 6px; font-weight: 700; border-radius: 8px; cursor: pointer; padding: 0.65rem 1.25rem;">
+            <i data-lucide="plus"></i> Thêm Dự án AI
+          </button>
+        </div>
+      </div>
+
+      <!-- AI Projects Table Card -->
+      <div class="data-card" style="margin-top: 1rem;">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:1rem; margin-bottom:1rem;">
+          <h3 style="font-size:1.1rem; color:#000000; font-weight:800;"><i data-lucide="table" style="width:16px; margin-right:4px;"></i> Danh sách các Dự án phát triển AI</h3>
+        </div>
+        
+        <div class="table-responsive" style="overflow-x:auto;">
+          <table class="data-table" style="width:100%; border-collapse:collapse; text-align:left; font-size:0.85rem;" id="ai-projects-table">
+            <thead>
+              <tr style="background-color:var(--bg-tertiary);">
+                <th style="padding:12px 10px;">TÊN DỰ ÁN AI</th>
+                <th style="padding:12px 10px;">NGƯỜI PHỤ TRÁCH</th>
+                <th style="padding:12px 10px; width:220px;">TIẾN ĐỘ</th>
+                <th style="padding:12px 10px;">MÔ TẢ GIẢI PHÁP</th>
+                <th style="padding:12px 10px;">CẬP NHẬT TUẦN NÀY</th>
+                <th style="padding:12px 10px;">KẾ HOẠCH TUẦN SAU</th>
+                <th style="padding:12px 10px; text-align:center;">NGÀY BẮT ĐẦU</th>
+                <th style="padding:12px 10px; text-align:center;">NGÀY XUẤT BẢN</th>
+                <th style="padding:12px 10px; text-align:center; width:120px;">THAO TÁC</th>
+              </tr>
+            </thead>
+            <tbody id="ai-projects-rows-container">
+              <!-- Rendered dynamically in JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 8: SYSTEM SETTINGS -->
+    <section id="section-system-settings" class="page-section">
+      <div class="card" style="max-width: 800px; margin: 0 auto;">
+        <h2 style="margin-bottom: 24px; color: var(--color-primary); display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="database"></i> Cài đặt Dữ liệu Nguồn (Google Sheets)
+        </h2>
+        <div style="background-color: var(--bg-color); padding: 16px; border-radius: 8px; border-left: 4px solid var(--color-primary); margin-bottom: 24px; font-size: 0.9rem; color: var(--text-secondary);">
+          <p style="margin-top: 0; margin-bottom: 8px;"><strong>Lưu ý quan trọng:</strong></p>
+          <ul style="margin: 0; padding-left: 20px;">
+            <li>File Google Sheet phải được đặt ở chế độ <strong>Chia sẻ &gt; Bất kỳ ai có liên kết đều có thể xem</strong>.</li>
+            <li>Có thể copy paste trực tiếp đường link gốc của file Google Sheet vào các ô dưới đây.</li>
+          </ul>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label style="font-weight: 600; display: block; margin-bottom: 8px;">Link Google Sheet - Khách hàng (Leads)</label>
+          <input type="text" id="setting-sheet-leads" class="filter-input" placeholder="VD: https://docs.google.com/spreadsheets/d/1A2b3C..." style="width: 100%; font-family: monospace;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label style="font-weight: 600; display: block; margin-bottom: 8px;">Link Google Sheet - Đơn hàng (Orders)</label>
+          <input type="text" id="setting-sheet-orders" class="filter-input" placeholder="VD: https://docs.google.com/spreadsheets/d/1A2b3C..." style="width: 100%; font-family: monospace;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label style="font-weight: 600; display: block; margin-bottom: 8px;">Link Google Sheet - Tái ký (Renewals)</label>
+          <input type="text" id="setting-sheet-renewals" class="filter-input" placeholder="VD: https://docs.google.com/spreadsheets/d/1A2b3C..." style="width: 100%; font-family: monospace;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 24px;">
+          <label style="font-weight: 600; display: block; margin-bottom: 8px;">Link Google Sheet - Performance (Nhân sự & OKR)</label>
+          <input type="text" id="setting-sheet-performance" class="filter-input" placeholder="VD: https://docs.google.com/spreadsheets/d/1A2b3C..." style="width: 100%; font-family: monospace;">
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid var(--border-color); padding-top: 20px;">
+          <button class="btn-primary" id="save-settings-btn" style="padding: 10px 24px; font-weight: 600;">
+            <i data-lucide="save" style="margin-right: 6px; width: 18px; display: inline-block; vertical-align: middle;"></i> 
+            <span style="vertical-align: middle;">Lưu Cài Đặt & Đồng Bộ</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Synchronization & Import Modal Dialog -->
+  <div class="modal-overlay" id="sync-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i data-lucide="refresh-cw" style="width: 18px; margin-right: 6px; display: inline-block; vertical-align: middle;"></i> Đồng bộ Dữ liệu Google Sheets</h3>
+        <button class="modal-close" id="close-sync-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Ứng dụng đang hiển thị dữ liệu được nén sẵn cực kỳ chính xác từ Google Sheet của bạn. Bạn có thể cập nhật dữ liệu mới bằng các phương thức sau:</p>
+        
+        <div class="filter-group">
+          <label for="sync-sheet-url">Đường dẫn Google Sheets</label>
+          <input type="text" id="sync-sheet-url" class="filter-input" value="https://docs.google.com/spreadsheets/d/1peLiU9RkmA34lIQCer4X6Uc95sP6PKgblr6BnSo80H8/edit?usp=sharing" disabled>
+          <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Ứng dụng sẽ đồng bộ trực tiếp từ trang tính này (cần có kết nối internet).</span>
+        </div>
+        
+        <div style="border: 1px dashed rgba(229,193,88,0.2); padding: 1rem; border-radius: var(--border-radius-md); background-color: rgba(255,255,255,0.01);">
+          <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.25rem;">
+            <i data-lucide="info" style="width:14px; color:var(--color-gold);"></i> Lưu ý về kết nối:
+          </h4>
+          <p style="font-size: 0.75rem; line-height: 1.5;">Do cơ chế bảo mật trình duyệt (CORS), nếu trình duyệt của bạn chặn đồng bộ trực tiếp, bạn cũng có thể nhấn nút **Đồng bộ đám mây** bên dưới để thử kết nối qua cổng API phụ của chúng tôi, hoặc tải lại trang.</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="cancel-sync-btn">Đóng</button>
+        <button class="sync-button" id="start-sync-btn" style="width: auto; padding: 0.75rem 1.5rem;">
+          <i data-lucide="refresh-cw"></i> Đồng bộ ngay
+        </button>
+      </div>
+    </div>
+  </div>
+
+  </div>
+
+  <!-- Key Account Adding & Editing Modal Dialog -->
+  <div class="modal-overlay" id="key-account-modal">
+    <div class="modal-card" style="max-width:640px;">
+      <div class="modal-header">
+        <h3 id="ka-modal-title">Thêm Khách Hàng Key Account</h3>
+        <button class="modal-close" id="close-ka-btn">&times;</button>
+      </div>
+      <form id="key-account-form">
+        <input type="hidden" id="ka-id">
+        <div class="modal-body">
+          
+          <div class="filter-group">
+            <label for="ka-name">Tên khách hàng lớn <span class="text-danger">*</span></label>
+            <input type="text" id="ka-name" class="filter-input" placeholder="Nhập tên doanh nghiệp hoặc cá nhân" required list="leads-datalist">
+            <datalist id="leads-datalist">
+              <!-- Populated dynamically from leads data in JS -->
+            </datalist>
+            <span style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">Nhập tên hoặc chọn gợi ý từ danh sách khách hàng Leads sẵn có.</span>
+          </div>
+          
+          <div class="filter-group">
+            <label>Sản phẩm quan tâm (Cho phép chọn nhiều sản phẩm cùng lúc) <span class="text-danger">*</span></label>
+            <div class="product-select-grid" id="ka-products-container">
+              <!-- Rendered dynamically from unique products in JS -->
+            </div>
+            <span style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">Tích chọn các sản phẩm nằm trong danh mục sản phẩm từ ORDER_REPORT.</span>
+          </div>
+          
+          <div style="display:flex; gap:1.25rem; flex-wrap:wrap; width:100%;">
+            <div class="filter-group" style="flex:1; min-width:220px;">
+              <label for="ka-stage">Giai đoạn tư vấn <span class="text-danger">*</span></label>
+              <select id="ka-stage" class="filter-input" required>
+                <option value="Nhận thông tin">1. Nhận thông tin</option>
+                <option value="Đang tư vấn">2. Đang tư vấn</option>
+                <option value="Đang demo/trial">3. Đang demo/trial</option>
+                <option value="Báo giá">4. Báo giá</option>
+                <option value="Ký hợp đồng">5. Ký hợp đồng</option>
+                <option value="Chăm sóc sau bán">6. Chăm sóc sau bán</option>
+                <option value="Tạm dừng">7. Tạm dừng</option>
+              </select>
+            </div>
+            
+            <div class="filter-group" style="flex:1; min-width:220px;">
+              <label>Mức độ tiềm năng <span class="text-danger">*</span></label>
+              <div style="height:38px; display:flex; align-items:center;">
+                <div class="stars-editor" id="ka-stars-editor">
+                  <i class="star-btn active" data-value="1" data-lucide="star"></i>
+                  <i class="star-btn active" data-value="2" data-lucide="star"></i>
+                  <i class="star-btn active" data-value="3" data-lucide="star"></i>
+                  <i class="star-btn" data-value="4" data-lucide="star"></i>
+                  <i class="star-btn" data-value="5" data-lucide="star"></i>
+                </div>
+                <input type="hidden" id="ka-potential" value="3">
+              </div>
+            </div>
+          </div>
+          
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancel-ka-btn">Hủy bỏ</button>
+          <button type="submit" class="sync-button" style="width:auto; padding: 0.75rem 1.5rem;" id="save-ka-btn">Lưu lại</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Renewal Customer Adding & Editing Modal Dialog -->
+  <div class="modal-overlay" id="renewal-customer-modal">
+    <div class="modal-card" style="max-width:600px;">
+      <div class="modal-header">
+        <h3 id="rc-modal-title">Thêm Khách Hàng Tái Ký</h3>
+        <button class="modal-close" id="close-rc-btn">&times;</button>
+      </div>
+      <form id="renewal-customer-form">
+        <input type="hidden" id="rc-id">
+        <div class="modal-body">
+          
+          <div class="filter-group">
+            <label for="rc-name">Tên khách hàng <span class="text-danger">*</span></label>
+            <input type="text" id="rc-name" class="filter-input" placeholder="Nhập tên doanh nghiệp hoặc cá nhân" required>
+          </div>
+          
+          <div style="display:flex; gap:1.25rem; flex-wrap:wrap; width:100%;">
+            <div class="filter-group" style="flex:1; min-width:200px;">
+              <label for="rc-value">Giá trị hợp đồng (VND) <span class="text-danger">*</span></label>
+              <input type="number" id="rc-value" class="filter-input" placeholder="Ví dụ: 150000000" required>
+            </div>
+            
+            <div class="filter-group" style="flex:1; min-width:200px;">
+              <label for="rc-expiry">Hạn hợp đồng <span class="text-danger">*</span></label>
+              <input type="date" id="rc-expiry" class="filter-input" required>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:1.25rem; flex-wrap:wrap; width:100%;">
+            <div class="filter-group" style="flex:1; min-width:200px;">
+              <label for="rc-status">Trạng thái <span class="text-danger">*</span></label>
+              <select id="rc-status" class="filter-input" required>
+                <option value="Chưa liên hệ">Chưa liên hệ</option>
+                <option value="Đang đàm phán">Đang đàm phán</option>
+                <option value="Đã chốt tái ký">Đã chốt tái ký</option>
+                <option value="Không tái ký">Không tái ký</option>
+              </select>
+            </div>
+            
+            <div class="filter-group" style="flex:1; min-width:200px;">
+              <label for="rc-am">Người phụ trách (AM) <span class="text-danger">*</span></label>
+              <input type="text" id="rc-am" class="filter-input" placeholder="Tên Account Manager" required>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label for="rc-notes">Ghi chú chi tiết</label>
+            <textarea id="rc-notes" class="filter-input" style="height: 100px; resize: vertical;" placeholder="Nhập ghi chú hoặc tiến độ đàm phán..."></textarea>
+          </div>
+          
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancel-rc-btn">Hủy bỏ</button>
+          <button type="submit" class="sync-button" style="width:auto; padding: 0.75rem 1.5rem;" id="save-rc-btn">Lưu lại</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Weekly Log Updating Modal Dialog -->
+  <div class="modal-overlay" id="key-account-log-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="ka-log-modal-title">Cập Nhật Nhật Ký Tuần</h3>
+        <button class="modal-close" id="close-ka-log-btn">&times;</button>
+      </div>
+      <form id="key-account-log-form">
+        <input type="hidden" id="ka-log-account-id">
+        <input type="hidden" id="ka-log-index"> <!-- For editing index -->
+        <div class="modal-body">
+          <p style="margin-bottom:0.5rem; font-weight:700; color:var(--color-gold); font-size: 0.95rem;" id="ka-log-customer-name">Khách hàng: ...</p>
+          
+          <div class="filter-group">
+            <label for="ka-log-week">Thời gian cập nhật (Tuần) <span class="text-danger">*</span></label>
+            <input type="text" id="ka-log-week" class="filter-input" placeholder="Ví dụ: Tuần 21/2026" required>
+            <span style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">Điền theo dạng: Tuần [Số tuần]/[Năm], ví dụ: Tuần 21/2026.</span>
+          </div>
+          
+          <div class="filter-group">
+            <label for="ka-log-update">Cập nhật tuần này (Đã làm được gì?) <span class="text-danger">*</span></label>
+            <textarea id="ka-log-update" class="filter-input" placeholder="Chi tiết các công việc đã triển khai trong tuần này..." required></textarea>
+          </div>
+          
+          <div class="filter-group">
+            <label for="ka-log-plan">Kế hoạch tuần sau (Sẽ làm gì tiếp theo?) <span class="text-danger">*</span></label>
+            <textarea id="ka-log-plan" class="filter-input" placeholder="Các hành động cụ thể để thúc đẩy khách hàng tuần tới..." required></textarea>
+          </div>
+          
+          <div class="filter-group">
+            <label for="ka-log-issues">Vấn đề / Khó khăn (Đang bị kẹt ở đâu?)</label>
+            <textarea id="ka-log-issues" class="filter-input" placeholder="Nêu rõ vướng mắc hoặc đề xuất Trưởng phòng hỗ trợ (nếu có)..."></textarea>
+          </div>
+          
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancel-ka-log-btn">Hủy bỏ</button>
+          <button type="submit" class="sync-button" style="width:auto; padding: 0.75rem 1.5rem;">Lưu nhật ký</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Weekly Logs History Modal Dialog -->
+  <div class="modal-overlay" id="key-account-history-modal">
+    <div class="modal-card" style="max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="flex-shrink:0;">
+        <h3 id="ka-history-title">Lịch Sử Cập Nhật Key Account</h3>
+        <button class="modal-close" id="close-ka-history-btn">&times;</button>
+      </div>
+      <div class="modal-body" style="overflow-y:auto; flex-grow:1; margin-bottom:1rem; padding-right:0.5rem;">
+        <p style="font-weight: 700; color: #fff; font-size:1.05rem;" id="ka-history-customer-name">Khách hàng: ...</p>
+        
+        <div class="timeline-container" id="ka-history-timeline">
+          <!-- Timeline contents will be rendered dynamically in JS -->
+        </div>
+      </div>
+      <div class="modal-actions" style="flex-shrink:0; border-top: 1px solid rgba(255,255,255,0.05); padding-top:1rem;">
+        <button class="btn-secondary" id="close-ka-history-btn-2">Đóng lại</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bi-directional Google Sheet Sync Settings Modal Dialog -->
+  <div class="modal-overlay" id="key-account-sync-modal">
+    <div class="modal-card" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3><i data-lucide="refresh-cw" style="width: 18px; margin-right: 6px; display: inline-block; vertical-align: middle;"></i> Đồng bộ Sheet Key Account</h3>
+        <button class="modal-close" id="close-ka-sync-btn">&times;</button>
+      </div>
+      <div class="modal-tab-group">
+        <div class="modal-tab active" data-tab="webhook">1. Đồng bộ tự động (Webhook Web App)</div>
+        <div class="modal-tab" data-tab="copy-paste">2. Sao chép và Dán thủ công</div>
+      </div>
+      
+      <!-- Tab 1: Webhook Cloud Sync -->
+      <div class="modal-tab-content active" id="tab-webhook">
+        <div class="modal-body">
+          <p style="font-size:0.82rem; line-height:1.5; color:var(--text-secondary);">Liên kết trực tiếp Dashboard với Google Sheets của bạn. Hãy thiết lập một Apps Script Web App để ghi dữ liệu tự động sang sheet <strong>Key Account</strong>.</p>
+          
+          <div class="filter-group">
+            <label for="ka-sync-webhook-url">Google Apps Script Web App URL <span class="text-danger">*</span></label>
+            <input type="text" id="ka-sync-webhook-url" class="filter-input" placeholder="Dán link Web App từ Apps Script của bạn tại đây...">
+            <span style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">Ví dụ: https://script.google.com/macros/s/AKfycb.../exec</span>
+          </div>
+          
+          <div style="margin-top:0.5rem;">
+            <label style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:0.25rem;">Mã nguồn Google Apps Script (Nhấp vào ô dưới để Copy)</label>
+            <textarea class="code-preview" id="copy-apps-script-btn" readonly style="width:100%; min-height: 150px; cursor:pointer;" title="Nhấp để sao chép toàn bộ mã nguồn">
+// Hướng dẫn: Mở Google Sheet -> Chọn Extensions -> Apps Script -> Xóa hết code cũ, dán đoạn mã này -> Deploy dưới dạng Web App (Chọn quyền Anyone)
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("Key Account");
+    if (!sheet) {
+      sheet = ss.insertSheet("Key Account");
+    }
+    
+    // Ghi tiêu đề cột nếu sheet trống
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow([
+        "Tên khách hàng", 
+        "Sản phẩm quan tâm", 
+        "Giai đoạn tư vấn", 
+        "Mức độ tiềm năng (Sao)", 
+        "Tuần cập nhật", 
+        "Cập nhật tuần này", 
+        "Kế hoạch tuần sau", 
+        "Vấn đề/Khó khăn", 
+        "Thời gian cập nhật hệ thống"
+      ]);
+      sheet.getRange(1, 1, 1, 9).setFontWeight("bold").setBackground("#ebebeb");
+    }
+    
+    // Xóa sạch nội dung cũ (trừ dòng tiêu đề) để đồng bộ mới hoàn toàn
+    if (sheet.getLastRow() > 1) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).clearContent();
+    }
+    
+    // Thêm từng bản ghi lịch sử tuần của Key Account
+    for (var i = 0; i < data.length; i++) {
+      var ka = data[i];
+      var name = ka.name;
+      var products = ka.products.join(", ");
+      var stage = ka.stage;
+      var potential = ka.potential;
+      
+      if (ka.weeklyLogs && ka.weeklyLogs.length > 0) {
+        for (var j = 0; j < ka.weeklyLogs.length; j++) {
+          var log = ka.weeklyLogs[j];
+          sheet.appendRow([
+            name,
+            products,
+            stage,
+            potential,
+            log.week,
+            log.updateThisWeek,
+            log.planNextWeek,
+            log.issues || "",
+            log.timestamp
+          ]);
+        }
+      } else {
+        // Ghi nhận hàng trống nhật ký
+        sheet.appendRow([
+          name,
+          products,
+          stage,
+          potential,
+          "Chưa có cập nhật",
+          "Chưa cập nhật tuần này",
+          "Chưa có kế hoạch",
+          "",
+          new Date().toLocaleDateString("vi-VN")
+        ]);
+      }
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Đồng bộ " + data.length + " Key Account thành công!"}))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader("Access-Control-Allow-Origin", "*");
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader("Access-Control-Allow-Origin", "*");
+  }
+}
+
+function doOptions(e) {
+  return ContentService.createTextOutput("")
+    .setMimeType(ContentService.MimeType.TEXT)
+    .setHeader("Access-Control-Allow-Origin", "*")
+    .setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+    .setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+            </textarea>
+            <span style="font-size:0.72rem; color:var(--color-gold);"><i data-lucide="info" style="width:12px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> Tự động hỗ trợ chống lỗi CORS. Click vào ô trên để tự động Copy.</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Tab 2: Copy Paste manual -->
+      <div class="modal-tab-content" id="tab-copy-paste">
+        <div class="modal-body">
+          <p style="font-size:0.82rem; line-height:1.5; color:var(--text-secondary);">Nếu bạn không muốn cài đặt Apps Script Webhook, bạn có thể sao chép nhanh dữ liệu dạng bảng Excel bên dưới để dán trực tiếp vào Google Sheets (Sheet: <strong>Key Account</strong>). Hãy nhấn sao chép và dán từ ô <strong>A1</strong>.</p>
+          
+          <div class="filter-group">
+            <label style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;">Bảng dữ liệu Excel-ready (Tab-Separated)</label>
+            <textarea id="ka-copy-data-area" class="filter-input" readonly style="min-height: 180px; font-family:monospace; font-size:0.72rem; background-color:#030712; color:#a7f3d0; overflow-y:auto;" title="Nhấp vào đây để tự động copy toàn bộ bảng"></textarea>
+            <span style="font-size:0.72rem; color:var(--color-emerald);"><i data-lucide="check" style="width:12px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> Dữ liệu tự động định dạng bảng cột chuẩn của Google Sheet.</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-actions" style="margin-top:1rem;">
+        <button class="btn-secondary" id="cancel-ka-sync-btn">Hủy bỏ</button>
+        <button class="btn-emerald" id="start-ka-sync-btn">
+          <i data-lucide="refresh-cw"></i> Thực hiện đồng bộ
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 1: Add / Edit Objective -->
+  <div class="modal-overlay" id="okr-objective-modal">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 id="okr-obj-modal-title">Thêm Mục Tiêu (Objective)</h3>
+        <button class="modal-close" id="close-okr-obj-btn">&times;</button>
+      </div>
+      <form id="okr-objective-form">
+        <input type="hidden" id="okr-obj-id">
+        <div class="modal-body">
+          <div class="filter-group">
+            <label for="okr-obj-quarter">Quý thực hiện <span class="text-danger">*</span></label>
+            <select id="okr-obj-quarter" class="filter-input" required>
+              <option value="Q1">Quý 1 / 2026</option>
+              <option value="Q2">Quý 2 / 2026</option>
+              <option value="Q3">Quý 3 / 2026</option>
+              <option value="Q4">Quý 4 / 2026</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="okr-obj-name">Tên Mục Tiêu (Objective) <span class="text-danger">*</span></label>
+            <textarea id="okr-obj-name" class="filter-input" placeholder="Ví dụ: O1: Bứt phá doanh số Cloud & Mở rộng tệp khách hàng Marketing Nóng" required style="min-height: 80px;"></textarea>
+            <span style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 4px;">Nêu rõ mục tiêu chiến lược định hướng hành động trong quý.</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancel-okr-obj-btn">Hủy bỏ</button>
+          <button type="submit" class="sync-button" style="width:auto; padding:0.75rem 1.5rem;">Lưu lại</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 2: Add / Edit Key Result (KR) -->
+  <div class="modal-overlay" id="okr-kr-modal">
+    <div class="modal-card" style="max-width: 680px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="flex-shrink:0;">
+        <h3 id="okr-kr-modal-title">Cấu Hình Kết Quả Then Chốt (Key Result)</h3>
+        <button class="modal-close" id="close-okr-kr-btn">&times;</button>
+      </div>
+      <form id="okr-kr-form" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column;">
+        <input type="hidden" id="okr-kr-id">
+        <input type="hidden" id="okr-kr-obj-id">
+        <div class="modal-body" style="overflow-y:auto; flex-grow:1; padding-right:0.5rem;">
+          
+          <div class="filter-group">
+            <label style="font-weight:700; color:var(--color-gold); font-size:0.9rem;" id="okr-kr-parent-obj-name">Thuộc Mục tiêu: ...</label>
+          </div>
+
+          <div class="filter-group">
+            <label for="okr-kr-name">Tên Kết Quả Then Chốt (KR) <span class="text-danger">*</span></label>
+            <input type="text" id="okr-kr-name" class="filter-input" placeholder="Ví dụ: Đạt doanh số JEGA Cloud tối thiểu 300 triệu VND" required>
+          </div>
+
+          <div style="display:flex; gap:1rem; flex-wrap:wrap; width:100%;">
+            <div class="filter-group" style="flex:1; min-width:140px;">
+              <label for="okr-kr-unit">Đơn vị đo lường <span class="text-danger">*</span></label>
+              <input type="text" id="okr-kr-unit" class="filter-input" placeholder="VND, Leads, %, Hợp đồng" required value="VND">
+            </div>
+            <div class="filter-group" style="flex:1; min-width:140px;">
+              <label for="okr-kr-target">Giá trị Mục tiêu <span class="text-danger">*</span></label>
+              <input type="number" id="okr-kr-target" class="filter-input" placeholder="e.g. 300000000" required>
+            </div>
+            <div class="filter-group" style="flex:1; min-width:140px;">
+              <label for="okr-kr-current">Thực tế hiện tại <span class="text-danger">*</span></label>
+              <input type="number" id="okr-kr-current" class="filter-input" placeholder="e.g. 120000000" required value="0">
+            </div>
+          </div>
+
+          <!-- Actions Breakdown Section -->
+          <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:1rem; margin-top:1rem;">
+            <h4 style="font-size:0.9rem; color:#fff; margin-bottom:1rem; font-weight:700;"><i data-lucide="calendar" style="width:14px; color:var(--color-gold); display:inline-block; vertical-align:middle; margin-right:4px;"></i> Kế hoạch Hành động Tổng & Phân rã Giai đoạn</h4>
+            
+            <div class="okr-tab-group" style="margin-bottom:1rem;">
+              <div class="okr-inner-tab active" data-month-idx="0" id="okr-inner-tab-m1">Tháng 1</div>
+              <div class="okr-inner-tab" data-month-idx="1" id="okr-inner-tab-m2">Tháng 2</div>
+              <div class="okr-inner-tab" data-month-idx="2" id="okr-inner-tab-m3">Tháng 3</div>
+            </div>
+
+            <!-- Month Action Content Area -->
+            <div class="okr-month-config-container">
+              <div class="filter-group">
+                <label for="okr-kr-month-action" id="lbl-kr-month-action">Hành động tổng của Tháng này <span class="text-danger">*</span></label>
+                <input type="text" id="okr-kr-month-action" class="filter-input" placeholder="Chi tiết hành động tổng của tháng..." required>
+              </div>
+              
+              <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                <label style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">Phân rã hành động 4 tuần</label>
+                <div class="filter-group" style="margin-bottom:0;">
+                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w1">Tuần 1 Action <span class="text-danger">*</span></label>
+                  <input type="text" id="okr-kr-w1" class="filter-input" placeholder="Công việc tuần 1..." required>
+                </div>
+                <div class="filter-group" style="margin-bottom:0;">
+                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w2">Tuần 2 Action <span class="text-danger">*</span></label>
+                  <input type="text" id="okr-kr-w2" class="filter-input" placeholder="Công việc tuần 2..." required>
+                </div>
+                <div class="filter-group" style="margin-bottom:0;">
+                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w3">Tuần 3 Action <span class="text-danger">*</span></label>
+                  <input type="text" id="okr-kr-w3" class="filter-input" placeholder="Công việc tuần 3..." required>
+                </div>
+                <div class="filter-group" style="margin-bottom:0;">
+                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w4">Tuần 4 Action <span class="text-danger">*</span></label>
+                  <input type="text" id="okr-kr-w4" class="filter-input" placeholder="Công việc tuần 4..." required>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+        <div class="modal-actions" style="flex-shrink:0; border-top: 1px solid rgba(255,255,255,0.05); padding-top:1rem;">
+          <button type="button" class="btn-secondary" id="cancel-okr-kr-btn">Hủy bỏ</button>
+          <button type="submit" class="sync-button" style="width:auto; padding:0.75rem 1.5rem;">Cập nhật KR</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 3: OKR Sync settings -->
+  <div class="modal-overlay" id="okr-sync-modal">
+    <div class="modal-card" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3><i data-lucide="refresh-cw" style="width: 18px; margin-right: 6px; display: inline-block; vertical-align: middle;"></i> Đồng bộ Sheet OKR 2026</h3>
+        <button class="modal-close" id="close-okr-sync-modal-btn">&times;</button>
+      </div>
+      <div class="modal-tab-group">
+        <div class="modal-tab active" id="okr-tab-webhook" data-okrtab="webhook">1. Đồng bộ tự động (Webhook Web App)</div>
+        <div class="modal-tab" id="okr-tab-copy" data-okrtab="copy-paste">2. Sao chép và Dán thủ công</div>
+      </div>
+      
+      <!-- Tab 1: Webhook Cloud Sync -->
+      <div class="modal-tab-content active" id="okr-content-webhook">
+        <div class="modal-body">
+          <p style="font-size:0.82rem; line-height:1.5; color:var(--text-secondary);">Thiết lập một Apps Script Web App trong Google Sheet để ghi dữ liệu OKR tự động sang sheet <strong>OKR 2026</strong>.</p>
+          
+          <div class="filter-group">
+            <label for="okr-sync-webhook-url">Google Apps Script Web App URL <span class="text-danger">*</span></label>
+            <input type="text" id="okr-sync-webhook-url" class="filter-input" placeholder="Dán link Web App từ Apps Script của bạn tại đây...">
+          </div>
+          
+          <div style="margin-top:0.5rem;">
+            <label style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:0.25rem;">Mã nguồn Google Apps Script (Nhấp vào ô dưới để Copy)</label>
+            <textarea class="code-preview" id="copy-okr-apps-script-btn" readonly style="width:100%; min-height: 150px; cursor:pointer;" title="Nhấp để sao chép toàn bộ mã nguồn">
+// Hướng dẫn: Mở Google Sheet -> Chọn Extensions -> Apps Script -> Xóa hết code cũ, dán đoạn mã này -> Deploy dưới dạng Web App (Chọn quyền Anyone)
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("OKR 2026");
+    if (!sheet) {
+      sheet = ss.insertSheet("OKR 2026");
+    }
+    
+    // Ghi tiêu đề cột nếu sheet trống
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow([
+        "Quý",
+        "Mục tiêu (Objective)", 
+        "Kết quả then chốt (KR)", 
+        "Đơn vị", 
+        "Mục tiêu số", 
+        "Thực tế số", 
+        "Tiến độ số liệu (%)",
+        "Tháng",
+        "Hành động tháng",
+        "Tuần",
+        "Hành động tuần",
+        "Trạng thái tuần"
+      ]);
+      sheet.getRange(1, 1, 1, 12).setFontWeight("bold").setBackground("#ebebeb");
+    }
+    
+    // Xóa sạch nội dung cũ (trừ dòng tiêu đề) để đồng bộ mới hoàn toàn
+    if (sheet.getLastRow() > 1) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, 12).clearContent();
+    }
+    
+    // Thêm từng bản ghi OKR
+    for (var i = 0; i < data.length; i++) {
+      var oItem = data[i];
+      var q = oItem.quarter;
+      var objName = oItem.objective;
+      
+      for (var j = 0; j < oItem.keyResults.length; j++) {
+        var kr = oItem.keyResults[j];
+        var krName = kr.name;
+        var unit = kr.unit;
+        var target = kr.target;
+        var current = kr.current;
+        var progress = target > 0 ? (current / target * 100).toFixed(1) + "%" : "0%";
+        
+        // Loop through months
+        for (var mKey in kr.weeklyActions) {
+          var mAction = kr.monthlyActions[mKey] || "";
+          var weeks = kr.weeklyActions[mKey];
+          
+          for (var w = 0; w < weeks.length; w++) {
+            var weekObj = weeks[w];
+            sheet.appendRow([
+              q,
+              objName,
+              krName,
+              unit,
+              target,
+              current,
+              progress,
+              mKey,
+              mAction,
+              weekObj.week,
+              weekObj.text,
+              weekObj.completed ? "Hoàn thành" : "Chưa hoàn thành"
+            ]);
+          }
+        }
+      }
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Đồng bộ OKR 2026 thành công!"}))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader("Access-Control-Allow-Origin", "*");
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader("Access-Control-Allow-Origin", "*");
+  }
+}
+
+function doOptions(e) {
+  return ContentService.createTextOutput("")
+    .setMimeType(ContentService.MimeType.TEXT)
+    .setHeader("Access-Control-Allow-Origin", "*")
+    .setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+    .setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+            </textarea>
+            <span style="font-size:0.72rem; color:var(--color-gold);"><i data-lucide="info" style="width:12px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> Click vào ô trên để tự động Copy.</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Tab 2: Copy Paste manual -->
+      <div class="modal-tab-content" id="okr-content-copy">
+        <div class="modal-body">
+          <p style="font-size:0.82rem; line-height:1.5; color:var(--text-secondary);">Bạn có thể sao chép nhanh dữ liệu OKR dạng bảng Excel bên dưới để dán trực tiếp vào Google Sheets tại ô <strong>A1</strong> (Sheet: <strong>OKR 2026</strong>).</p>
+          
+          <div class="filter-group">
+            <label style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;">Bảng dữ liệu Excel-ready (Tab-Separated)</label>
+            <textarea id="okr-copy-data-area" class="filter-input" readonly style="min-height: 180px; font-family:monospace; font-size:0.72rem; background-color:#030712; color:#a7f3d0; overflow-y:auto;" title="Nhấp vào đây để tự động copy toàn bộ bảng"></textarea>
+            <span style="font-size:0.72rem; color:var(--color-emerald);"><i data-lucide="check" style="width:12px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> Click để copy.</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-actions" style="margin-top:1rem;">
+        <button class="btn-secondary" id="cancel-okr-sync-modal-btn">Hủy bỏ</button>
+        <button class="btn-emerald" id="start-okr-sync-btn">
+          <i data-lucide="refresh-cw"></i> Thực hiện đồng bộ
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Commitment Period -->
+  <div class="modal-overlay" id="commitment-edit-modal">
+    <div class="modal-card" style="max-width:550px; max-height:85vh; display:flex; flex-direction:column;">
+      <div class="modal-header">
+        <h3 id="comm-edit-modal-title">Cấu hình Chỉ số Cam kết</h3>
+        <button class="modal-close" id="close-comm-edit-btn">&times;</button>
+      </div>
+      <form id="commitment-edit-form" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; padding:1.5rem; gap:1rem;">
+        <input type="hidden" id="comm-row-id">
+        <input type="hidden" id="comm-month-index">
+        
+        <!-- Month and Week Info -->
+        <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+          <div class="filter-group">
+            <label for="comm-month-name">Thuộc Tháng</label>
+            <input type="text" id="comm-month-name" class="filter-input" readonly style="background-color: var(--bg-tertiary); cursor: not-allowed;">
+          </div>
+          <div class="filter-group">
+            <label for="comm-week-name">Tên Tuần <span class="text-danger">*</span></label>
+            <input type="text" id="comm-week-name" class="filter-input" placeholder="Ví dụ: Tuần 1, Tuần 5" required>
+          </div>
+        </div>
+
+        <!-- Date Range Row -->
+        <div class="form-row" id="comm-date-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+          <div class="filter-group">
+            <label for="comm-start-date">Từ ngày <span class="text-danger">*</span></label>
+            <input type="text" id="comm-start-date" class="filter-input" placeholder="DD/MM/YYYY" required>
+          </div>
+          <div class="filter-group">
+            <label for="comm-end-date">Đến ngày <span class="text-danger">*</span></label>
+            <input type="text" id="comm-end-date" class="filter-input" placeholder="DD/MM/YYYY" required>
+          </div>
+        </div>
+
+        <!-- Target Inputs (Retail & Business) -->
+        <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+          <div class="filter-group">
+            <label for="comm-val-retail">Cam kết Retail (VND) <span class="text-danger">*</span></label>
+            <input type="number" id="comm-val-retail" class="filter-input" placeholder="Ví dụ: 50000000" required>
+          </div>
+          <div class="filter-group">
+            <label for="comm-val-business">Cam kết Business (VND) <span class="text-danger">*</span></label>
+            <input type="number" id="comm-val-business" class="filter-input" placeholder="Ví dụ: 15000000" required>
+          </div>
+        </div>
+
+        <!-- Target Inputs (Hiệu suất & Demo) -->
+        <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+          <div class="filter-group">
+            <label for="comm-val-perf">Chỉ tiêu Hiệu suất (%) <span class="text-danger">*</span></label>
+            <input type="number" id="comm-val-perf" class="filter-input" placeholder="Ví dụ: 70" required min="0" max="100">
+          </div>
+          <div class="filter-group">
+            <label for="comm-val-demo">Chỉ tiêu Demo (Lượt) <span class="text-danger">*</span></label>
+            <input type="number" id="comm-val-demo" class="filter-input" placeholder="Ví dụ: 5" required min="0">
+          </div>
+        </div>
+
+        <!-- Week Note Input -->
+        <div class="filter-group" id="comm-week-note-row">
+          <label for="comm-week-note">Ghi chú tuần</label>
+          <textarea id="comm-week-note" class="filter-input" style="height:80px; resize:vertical; padding:8px; line-height: 1.4;" placeholder="Nhập ghi chú cho tuần kinh doanh này..."></textarea>
+        </div>
+
+        <input type="hidden" id="comm-val-go" value="0">
+
+        <div class="modal-actions" style="margin-top:1.5rem; justify-content:flex-end;">
+          <button type="button" class="btn-secondary" id="cancel-comm-edit-btn">Hủy bỏ</button>
+          <button type="submit" class="btn-primary">Lưu Tuần Cam Kết</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Commitment Sync -->
+  <div class="modal-overlay" id="commitment-sync-modal">
+    <div class="modal-card" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3><i data-lucide="cloud-lightning" style="width: 18px; margin-right: 6px; display: inline-block; vertical-align: middle;"></i> Đồng bộ Cam kết Google Sheets</h3>
+        <button class="modal-close" id="close-comm-sync-modal-btn">&times;</button>
+      </div>
+      
+      <div class="modal-tabs" style="display:flex; border-bottom:1px solid rgba(255,255,255,0.1); margin-bottom:1rem;">
+        <button class="modal-tab active" data-commtab="webhook" style="padding:0.5rem 1rem; background:none; border:none; color:var(--text-secondary); cursor:pointer; font-weight:600; border-bottom:2px solid transparent;">1. Tự động Webhook</button>
+        <button class="modal-tab" data-commtab="copy-paste" style="padding:0.5rem 1rem; background:none; border:none; color:var(--text-secondary); cursor:pointer; font-weight:600; border-bottom:2px solid transparent;">2. Sao chép và Dán thủ công</button>
+      </div>
+      
+      <!-- Tab 1: Webhook -->
+      <div class="modal-tab-content" id="comm-content-webhook">
+        <div class="modal-body">
+          <p style="font-size:0.82rem; line-height:1.5; color:var(--text-secondary);">Hệ thống sẽ đồng bộ mượt mà với sheet <strong>Commitment</strong> của bạn qua Webhook.</p>
+          
+          <div class="filter-group" style="margin-top: 1rem;">
+            <label for="comm-sync-webhook-url">URL Webhook (Google Apps Script) <span class="text-danger">*</span></label>
+            <input type="url" id="comm-sync-webhook-url" class="filter-input" placeholder="https://script.google.com/macros/s/.../exec">
+          </div>
+          
+          <div class="filter-group">
+            <label style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;">Mã nguồn Google Apps Script</label>
+            <textarea id="copy-comm-apps-script-btn" class="filter-input" readonly style="min-height: 120px; font-family:monospace; font-size:0.72rem; background-color:#030712; color:#3b82f6; cursor:pointer; overflow-y:auto;" title="Nhấp vào đây để tự động copy toàn bộ đoạn mã">
+function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Commitment");
+    if (!sheet) {
+      sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet("Commitment");
+    }
+    
+    var data = JSON.parse(e.postData.contents);
+    sheet.clear();
+    
+    sheet.appendRow(["", "Từ ngày", "Đến ngày", "Line", "Doanh thu cam kết", "Hiệu suất cam kết", "Demo cam kết"]);
+    
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      sheet.appendRow(["", row.startDate, row.endDate, row.line, row.revenue, row.perf, row.demo]);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Đồng bộ Commitment thành công!"}))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader("Access-Control-Allow-Origin", "*");
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader("Access-Control-Allow-Origin", "*");
+  }
+}
+
+function doOptions(e) {
+  return ContentService.createTextOutput("")
+    .setMimeType(ContentService.MimeType.TEXT)
+    .setHeader("Access-Control-Allow-Origin", "*")
+    .setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+    .setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+            </textarea>
+            <span style="font-size:0.72rem; color:var(--color-gold);"><i data-lucide="info" style="width:12px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> Click vào ô trên để tự động Copy.</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Tab 2: Copy Paste manual -->
+      <div class="modal-tab-content" id="comm-content-copy" style="display:none;">
+        <div class="modal-body">
+          <p style="font-size:0.82rem; line-height:1.5; color:var(--text-secondary);">Bạn có thể sao chép nhanh dữ liệu dạng bảng Excel bên dưới để dán trực tiếp vào Google Sheets tại ô <strong>A1</strong> (Sheet: <strong>Commitment</strong>).</p>
+          
+          <div class="filter-group">
+            <label style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;">Bảng dữ liệu Excel-ready (Tab-Separated)</label>
+            <textarea id="comm-copy-data-area" class="filter-input" readonly style="min-height: 180px; font-family:monospace; font-size:0.72rem; background-color:#030712; color:#a7f3d0; overflow-y:auto;" title="Nhấp vào đây để tự động copy toàn bộ bảng"></textarea>
+            <span style="font-size:0.72rem; color:var(--color-emerald);"><i data-lucide="check" style="width:12px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> Click để copy.</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-actions" style="margin-top:1rem;">
+        <button class="btn-secondary" id="cancel-comm-sync-modal-btn">Hủy bỏ</button>
+        <button class="btn-emerald" id="start-comm-sync-btn">
+          <i data-lucide="refresh-cw"></i> Thực hiện đồng bộ
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Project Adding & Editing Modal Dialog -->
+  <div class="modal-overlay" id="ai-project-modal">
+    <div class="modal-card" style="max-width:680px;">
+      <div class="modal-header">
+        <h3 id="ai-project-modal-title">Thêm Dự Án AI Mới</h3>
+        <button class="modal-close" id="close-ai-project-btn">&times;</button>
+      </div>
+      <form id="ai-project-form">
+        <input type="hidden" id="ai-project-id">
+        <div class="modal-body">
+          <div class="filter-group">
+            <label for="ai-project-name">Tên Dự Án AI <span class="text-danger">*</span></label>
+            <input type="text" id="ai-project-name" class="filter-input" placeholder="Nhập tên dự án công nghệ AI..." required>
+          </div>
+          
+          <div class="filter-group">
+            <label for="ai-project-owner">Người phụ trách <span class="text-danger">*</span></label>
+            <select id="ai-project-owner" class="filter-input" required>
+              <option value="">-- Chọn nhân sự phụ trách --</option>
+              <option value="Đỗ Thị Hải Yến">Đỗ Thị Hải Yến</option>
+              <option value="Nguyễn Trọng Tín">Nguyễn Trọng Tín</option>
+              <option value="Lê Thị Hoài Phúc">Lê Thị Hoài Phúc</option>
+              <option value="Phan Ngọc Thúy">Phan Ngọc Thúy</option>
+              <option value="Võ Gia Hân">Võ Gia Hân</option>
+            </select>
+          </div>
+          
+          <div class="filter-group">
+            <label for="ai-project-progress">Tiến độ (%) <span class="text-danger">*</span></label>
+            <input type="number" id="ai-project-progress" class="filter-input" placeholder="0 - 100" min="0" max="100" required value="0">
+          </div>
+          
+          <div style="display:flex; gap:1.25rem; flex-wrap:wrap; width:100%;">
+            <div class="filter-group" style="flex:1; min-width:200px;">
+              <label for="ai-project-start-date">Ngày bắt đầu <span class="text-danger">*</span></label>
+              <input type="date" id="ai-project-start-date" class="filter-input" required>
+            </div>
+            
+            <div class="filter-group" style="flex:1; min-width:200px;">
+              <label for="ai-project-publish-date">Ngày xuất bản (Dự kiến / Thực tế)</label>
+              <input type="date" id="ai-project-publish-date" class="filter-input">
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label for="ai-project-description">Mô tả giải pháp</label>
+            <textarea id="ai-project-description" class="filter-input" rows="2" style="resize:vertical; font-family:inherit; font-size:0.85rem; line-height:1.5;" placeholder="Mô tả ngắn gọn giải pháp AI..."></textarea>
+          </div>
+
+          <div class="filter-group">
+            <label for="ai-project-update-this-week">Cập nhật tuần này</label>
+            <textarea id="ai-project-update-this-week" class="filter-input" rows="2" style="resize:vertical; font-family:inherit; font-size:0.85rem; line-height:1.5;" placeholder="Những gì đã hoàn thành trong tuần này..."></textarea>
+          </div>
+
+          <div class="filter-group">
+            <label for="ai-project-plan-next-week">Kế hoạch tuần sau</label>
+            <textarea id="ai-project-plan-next-week" class="filter-input" rows="2" style="resize:vertical; font-family:inherit; font-size:0.85rem; line-height:1.5;" placeholder="Kế hoạch cho tuần tiếp theo..."></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancel-ai-project-btn">Hủy bỏ</button>
+          <button type="submit" class="sync-button" style="width:auto; padding: 0.75rem 1.5rem;" id="save-ai-project-btn">Lưu lại</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Executive printable Report Modal Dialog -->
+  <div class="modal-overlay" id="report-modal">
+    <div class="modal-card" style="max-width:960px; width:95%; max-height:92vh; display:flex; flex-direction:column; background-color:#0f172a;">
+      <div class="modal-header" style="flex-shrink:0;">
+        <h3 style="display:flex; align-items:center; gap:8px;">
+          <i data-lucide="file-text" style="color:var(--color-gold);"></i> 
+          <span>Báo Cáo Tổng Hợp Doanh Số & Đề Xuất AI</span>
+        </h3>
+        <button class="modal-close" id="close-report-btn">&times;</button>
+      </div>
+      <div class="modal-body" style="overflow-y:auto; flex-grow:1; padding:1.5rem; background-color:#ffffff; color:#0f172a;" id="report-printable-area">
+        <!-- Rendered dynamically for printing -->
+      </div>
+      <div class="modal-actions" style="flex-shrink:0; background-color:#1e293b; padding:1rem; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:flex-end; gap:0.75rem;">
+        <button class="btn-secondary" id="cancel-report-btn" style="background:#475569; color:white; border:none;">Đóng lại</button>
+        <button class="btn-primary" id="print-report-btn" style="background:linear-gradient(135deg, #14B8A6, #0D9488); border:none; color:white; display:flex; align-items:center; gap:6px; font-weight:700;">
+          <i data-lucide="printer"></i> In Báo Cáo / Lưu PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loaded Javascript Data File -->
+  <script src="data.js"></script>
+  <!-- Application Logic Controller -->
+  <script src="app.js"></script>
+  
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+  </script>
+</body>
+</html>
