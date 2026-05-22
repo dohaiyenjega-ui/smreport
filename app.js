@@ -772,6 +772,171 @@ function getActualOrdersMetricsForPeriod(startDate, endDate) {
   return { totalRevenue, orderCount };
 }
 
+function getActualOrdersCountExcludeGo(startDate, endDate) {
+  let orderCount = 0;
+  ordersData.forEach(order => {
+    // Apply salesperson filter
+    if (filterState.sales !== "all" && order.sales !== filterState.sales) return;
+    
+    // Apply global productGroup filter
+    if (filterState.productGroup !== "all") {
+      const cat = getProductCategory(order.san_pham);
+      if (filterState.productGroup === "cloud" && cat !== "JEGA Cloud") return;
+      if (filterState.productGroup === "visual" && cat !== "JEGA Visual") return;
+    }
+    
+    // Apply global productLine filter
+    if (filterState.productLine !== "all") {
+      const line = getProductLine(order.san_pham);
+      if (line !== filterState.productLine) return;
+    }
+    
+    // Apply category filter
+    if (filterState.orderCategory !== "all") {
+      const cat = getProductCategory(order.san_pham);
+      if (filterState.orderCategory === "cloud" && cat !== "JEGA Cloud") return;
+      if (filterState.orderCategory === "visual" && cat !== "JEGA Visual") return;
+    }
+    
+    // Apply type filter
+    if (filterState.orderType !== "all" && order.loai_don !== filterState.orderType) return;
+    
+    // Apply search filter
+    if (filterState.searchOrders) {
+      const query = filterState.searchOrders.toLowerCase();
+      const matchName = order.ten_kh.toLowerCase().includes(query);
+      const matchId = order.ma_kh.toLowerCase().includes(query);
+      const matchProduct = order.san_pham.toLowerCase().includes(query);
+      const matchPhone = order.dien_thoai.toLowerCase().includes(query);
+      if (!matchName && !matchId && !matchProduct && !matchPhone) return;
+    }
+    
+    const line = getProductLine(order.san_pham);
+    if (line === "Go") return;
+    
+    const orderDate = parseDate(order.ngay_mua);
+    if (orderDate && (!startDate || orderDate >= startDate) && (!endDate || orderDate <= endDate)) {
+      orderCount++;
+    }
+  });
+  return orderCount;
+}
+
+function isDateInQuarter(dateStr, quarter) {
+  const date = parseDate(dateStr);
+  if (!date) return false;
+  if (date.getFullYear() !== 2026) return false;
+  const month = date.getMonth(); // 0-11
+  if (quarter === "Q1") return month >= 0 && month <= 2;
+  if (quarter === "Q2") return month >= 3 && month <= 5;
+  if (quarter === "Q3") return month >= 6 && month <= 8;
+  if (quarter === "Q4") return month >= 9 && month <= 11;
+  return false;
+}
+
+function calculateOkrMetric(quarter, metricType) {
+  if (!metricType || metricType === "custom") return 0;
+  
+  const quarterLeads = leadsData.filter(lead => isDateInQuarter(lead.ngay_tao, quarter));
+  const quarterOrders = ordersData.filter(order => isDateInQuarter(order.ngay_mua, quarter));
+  
+  const demoFunnel = ["Demo", "Dùng thử", "Báo giá", "Ký hợp đồng", "Gửi hợp đồng", "Đặt cọc", "Thất bại"];
+  
+  switch (metricType) {
+    case "revenue": {
+      let sum = 0;
+      quarterOrders.forEach(o => {
+        sum += parseFloat(o.doanh_thu) || 0;
+      });
+      return sum;
+    }
+    case "revenue_business": {
+      let sum = 0;
+      quarterOrders.forEach(o => {
+        if (getProductLine(o.san_pham) === "Business") {
+          sum += parseFloat(o.doanh_thu) || 0;
+        }
+      });
+      return sum;
+    }
+    case "revenue_retail": {
+      let sum = 0;
+      quarterOrders.forEach(o => {
+        if (getProductLine(o.san_pham) === "Retail") {
+          sum += parseFloat(o.doanh_thu) || 0;
+        }
+      });
+      return sum;
+    }
+    case "revenue_interio_ai": {
+      let sum = 0;
+      quarterOrders.forEach(o => {
+        const p = o.san_pham ? o.san_pham.toLowerCase() : "";
+        if (p.includes("interior") || p.includes("interio")) {
+          sum += parseFloat(o.doanh_thu) || 0;
+        }
+      });
+      return sum;
+    }
+    case "sales_closing_rate": {
+      const jegaOrders = quarterOrders.filter(o => getProductCategory(o.san_pham) === "JEGA Cloud").length;
+      const demoLeads = quarterLeads.filter(l => demoFunnel.includes(l.moi_quan_he)).length;
+      if (demoLeads === 0) return 0;
+      return parseFloat(((jegaOrders / demoLeads) * 100).toFixed(2));
+    }
+    case "lead_to_demo": {
+      const demoLeads = quarterLeads.filter(l => demoFunnel.includes(l.moi_quan_he)).length;
+      const totalLeads = quarterLeads.length;
+      if (totalLeads === 0) return 0;
+      return parseFloat(((demoLeads / totalLeads) * 100).toFixed(2));
+    }
+    case "lead_mkt_to_demo": {
+      const mktHotLeads = quarterLeads.filter(l => getLeadSourceGroup(l.nguon) === "Marketing Nóng");
+      const mktHotTotal = mktHotLeads.length;
+      const mktHotDemo = mktHotLeads.filter(l => demoFunnel.includes(l.moi_quan_he)).length;
+      if (mktHotTotal === 0) return 0;
+      return parseFloat(((mktHotDemo / mktHotTotal) * 100).toFixed(2));
+    }
+    case "lead_mkt_to_deal": {
+      const mktHotLeads = quarterLeads.filter(l => getLeadSourceGroup(l.nguon) === "Marketing Nóng");
+      const mktHotTotal = mktHotLeads.length;
+      const mktHotDeal = mktHotLeads.filter(l => l.moi_quan_he === "Ký hợp đồng").length;
+      if (mktHotTotal === 0) return 0;
+      return parseFloat(((mktHotDeal / mktHotTotal) * 100).toFixed(2));
+    }
+    case "lead_to_deal": {
+      const jegaOrders = quarterOrders.filter(o => getProductCategory(o.san_pham) === "JEGA Cloud").length;
+      const totalLeads = quarterLeads.length;
+      if (totalLeads === 0) return 0;
+      return parseFloat(((jegaOrders / totalLeads) * 100).toFixed(2));
+    }
+    case "new_leads": {
+      return quarterLeads.length;
+    }
+    case "jcf_contracts": {
+      const jcfKeywords = ["phần mềm sản xuất", "factory", "lite", "mini lite"];
+      return quarterOrders.filter(o => {
+        const p = o.san_pham ? o.san_pham.toLowerCase() : "";
+        return jcfKeywords.some(kw => p.includes(kw));
+      }).length;
+    }
+    case "showroom_contracts": {
+      return quarterOrders.filter(o => {
+        const p = o.san_pham ? o.san_pham.toLowerCase() : "";
+        return p.includes("showroom");
+      }).length;
+    }
+    case "interio_contracts": {
+      return quarterOrders.filter(o => {
+        const p = o.san_pham ? o.san_pham.toLowerCase() : "";
+        return p.includes("interior") || p.includes("interio");
+      }).length;
+    }
+    default:
+      return 0;
+  }
+}
+
 // Helper to parse performance rate
 function parsePerfValue(val) {
   if (val === undefined || val === null) return 0;
@@ -1101,11 +1266,13 @@ function updateKPIs() {
   
   // 1. COLUMN 1 CALCULATIONS (Cam kết & Thực đạt)
   const currentComm = getCommitmentRevenueForPeriod(fromDate, toDate);
-  const { totalRevenue: currentActual, orderCount: newOrdersCount } = getActualOrdersMetricsForPeriod(fromDate, toDate);
+  const { totalRevenue: currentActual } = getActualOrdersMetricsForPeriod(fromDate, toDate);
+  const newOrdersCount = getActualOrdersCountExcludeGo(fromDate, toDate);
   const currentCompRate = currentComm > 0 ? (currentActual / currentComm) * 100 : 0;
   
   const prevComm = getCommitmentRevenueForPeriod(prevFromDate, prevToDate);
-  const { totalRevenue: prevActual, orderCount: prevOrdersCount } = getActualOrdersMetricsForPeriod(prevFromDate, prevToDate);
+  const { totalRevenue: prevActual } = getActualOrdersMetricsForPeriod(prevFromDate, prevToDate);
+  const prevOrdersCount = getActualOrdersCountExcludeGo(prevFromDate, prevToDate);
   const prevCompRate = prevComm > 0 ? (prevActual / prevComm) * 100 : 0;
   
   // Set Column 1 UI
@@ -2836,6 +3003,7 @@ window.generateRenewTableHtml = function(yearData, yearStr, isPdf = false, targe
         <td style="padding: 12px; border: 1px solid #cbd5e1; text-align: center; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${q}</td>
         <td style="padding: 12px; border: 1px solid #cbd5e1; text-align: center; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${qData.total["Sắp hết hạn"]}</td>
         <td style="padding: 12px; border: 1px solid #cbd5e1; text-align: center; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${qData.total["Đang sử dụng"]}</td>
+        <td style="padding: 12px; border: 1px solid #cbd5e1; text-align: center; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${qData.total["Hết hạn"]}</td>
         <td style="padding: 12px; border: 1px solid #cbd5e1; text-align: center; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${qData.total["Không tái ký"]}</td>
         <td style="padding: 12px; border: 1px solid #cbd5e1; text-align: center; color: var(--color-primary); -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">${qData.total.total}</td>
         <td style="padding: 12px; border: 1px solid #cbd5e1; text-align: center; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
@@ -2850,7 +3018,7 @@ window.generateRenewTableHtml = function(yearData, yearStr, isPdf = false, targe
     if (q==="Q4") startMonth = 10;
 
     for (let m = startMonth; m < startMonth + 3; m++) {
-      const mData = qData.months[m] || { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Không tái ký": 0, total: 0 };
+      const mData = qData.months[m] || { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Hết hạn": 0, "Không tái ký": 0, total: 0 };
       const mId = `${yearStr}_Tháng ${m}`;
       const savedRenewedM = renewedCounts[mId] || "";
       
@@ -2861,6 +3029,7 @@ window.generateRenewTableHtml = function(yearData, yearStr, isPdf = false, targe
           <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; color: #475569;">Tháng ${m}</td>
           <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; color: #475569;">${mData["Sắp hết hạn"]}</td>
           <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; color: #475569;">${mData["Đang sử dụng"]}</td>
+          <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; color: #475569;">${mData["Hết hạn"]}</td>
           <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; color: #475569;">${mData["Không tái ký"]}</td>
           <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center; font-weight: 600;">${mData.total}</td>
           <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: center;">
@@ -2920,7 +3089,11 @@ window.renderRenewalDashboards = function() {
     const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
     
     if (diffDays < 0) {
-      dynamicItem.status = "Không tái ký";
+      if (item.status === "Không tái ký" || item.reason) {
+        dynamicItem.status = "Không tái ký";
+      } else {
+        dynamicItem.status = "Hết hạn";
+      }
     } else if (diffDays <= 30) {
       dynamicItem.status = "Sắp hết hạn";
     } else {
@@ -2944,7 +3117,7 @@ window.renderRenewalDashboards = function() {
     ["Q1","Q2","Q3","Q4"].forEach(q => {
       yearData[q] = {
         months: {},
-        total: { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Không tái ký": 0, total: 0 }
+        total: { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Hết hạn": 0, "Không tái ký": 0, total: 0 }
       };
     });
   });
@@ -2962,10 +3135,10 @@ window.renderRenewalDashboards = function() {
 
     const targetData = year === 2025 ? data2025 : data2026;
     if (!targetData[q].months[month]) {
-      targetData[q].months[month] = { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Không tái ký": 0, total: 0 };
+      targetData[q].months[month] = { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Hết hạn": 0, "Không tái ký": 0, total: 0 };
     }
 
-    if (["Sắp hết hạn", "Đang sử dụng", "Không tái ký"].includes(item.status)) {
+    if (["Sắp hết hạn", "Đang sử dụng", "Hết hạn", "Không tái ký"].includes(item.status)) {
       targetData[q].months[month][item.status]++;
       targetData[q].months[month].total++;
       targetData[q].total[item.status]++;
@@ -3702,11 +3875,11 @@ function loadMonthFormState() {
   document.getElementById("okr-inner-tab-m3").innerText = months[2];
   
   // Update dynamic input labels
-  document.getElementById("lbl-kr-month-action").innerHTML = `Hành động tổng của <strong>${currentMonthName}</strong> <span class="text-danger">*</span>`;
-  document.getElementById("lbl-okr-kr-w1").innerText = `Tuần 1 Action (${currentMonthName}) *`;
-  document.getElementById("lbl-okr-kr-w2").innerText = `Tuần 2 Action (${currentMonthName}) *`;
-  document.getElementById("lbl-okr-kr-w3").innerText = `Tuần 3 Action (${currentMonthName}) *`;
-  document.getElementById("lbl-okr-kr-w4").innerText = `Tuần 4 Action (${currentMonthName}) *`;
+  document.getElementById("lbl-kr-month-action").innerHTML = `Hành động tổng của <strong>${currentMonthName}</strong>`;
+  document.getElementById("lbl-okr-kr-w1").innerText = `Tuần 1 Action (${currentMonthName})`;
+  document.getElementById("lbl-okr-kr-w2").innerText = `Tuần 2 Action (${currentMonthName})`;
+  document.getElementById("lbl-okr-kr-w3").innerText = `Tuần 3 Action (${currentMonthName})`;
+  document.getElementById("lbl-okr-kr-w4").innerText = `Tuần 4 Action (${currentMonthName})`;
   
   // Push text values to fields
   document.getElementById("okr-kr-month-action").value = editingKRTemp.monthlyActions[currentMonthName] || "";
@@ -3795,6 +3968,10 @@ function initOKRListeners() {
       editingKRTemp.unit = document.getElementById("okr-kr-unit").value.trim();
       editingKRTemp.target = parseFloat(document.getElementById("okr-kr-target").value) || 0;
       editingKRTemp.current = parseFloat(document.getElementById("okr-kr-current").value) || 0;
+      editingKRTemp.metricType = document.getElementById("okr-kr-metric").value;
+      if (editingKRTemp.isManualCurrent === undefined) {
+        editingKRTemp.isManualCurrent = (editingKRTemp.metricType === "custom");
+      }
       
       // Save details for active tab first
       saveCurrentMonthFormState();
@@ -3819,6 +3996,66 @@ function initOKRListeners() {
       renderOKRDashboard();
       document.getElementById("okr-kr-modal").classList.remove("active");
       editingKRTemp = null;
+    });
+  }
+
+  // Predefined metrics listeners inside KR modal
+  const krMetricSelect = document.getElementById("okr-kr-metric");
+  if (krMetricSelect) {
+    krMetricSelect.addEventListener("change", function() {
+      const metricType = this.value;
+      if (!editingKRTemp) return;
+      
+      editingKRTemp.metricType = metricType;
+      
+      if (metricType === "custom") {
+        editingKRTemp.isManualCurrent = true;
+        return;
+      }
+      
+      const METRIC_DEFAULTS = {
+        revenue: { name: "Tổng doanh thu", unit: "VND" },
+        revenue_business: { name: "Doanh thu Business", unit: "VND" },
+        revenue_retail: { name: "Doanh thu Retail", unit: "VND" },
+        revenue_interio_ai: { name: "Doanh thu Interio AI", unit: "VND" },
+        sales_closing_rate: { name: "Tỉ lệ chốt sales", unit: "%" },
+        lead_to_demo: { name: "Lead to demo", unit: "%" },
+        lead_mkt_to_demo: { name: "Lead MKT to demo", unit: "%" },
+        lead_mkt_to_deal: { name: "Lead MKT to Deal", unit: "%" },
+        lead_to_deal: { name: "Lead to Deal", unit: "%" },
+        new_leads: { name: "Lead mới", unit: "Leads" },
+        jcf_contracts: { name: "Hợp đồng JCF", unit: "Hợp đồng" },
+        showroom_contracts: { name: "Hợp đồng ShowAI", unit: "Hợp đồng" },
+        interio_contracts: { name: "Hợp đồng InterioAI", unit: "Hợp đồng" }
+      };
+      
+      const defaults = METRIC_DEFAULTS[metricType];
+      if (defaults) {
+        document.getElementById("okr-kr-name").value = defaults.name;
+        document.getElementById("okr-kr-unit").value = defaults.unit;
+        
+        // Find parent quarter
+        const objId = document.getElementById("okr-kr-obj-id").value;
+        const parentObj = okrData.find(o => o.id === objId);
+        const quarter = parentObj ? parentObj.quarter : "Q1";
+        
+        const calculated = calculateOkrMetric(quarter, metricType);
+        document.getElementById("okr-kr-current").value = calculated;
+        
+        editingKRTemp.name = defaults.name;
+        editingKRTemp.unit = defaults.unit;
+        editingKRTemp.current = calculated;
+        editingKRTemp.isManualCurrent = false;
+      }
+    });
+  }
+  
+  const krCurrentInput = document.getElementById("okr-kr-current");
+  if (krCurrentInput) {
+    krCurrentInput.addEventListener("input", function() {
+      if (editingKRTemp) {
+        editingKRTemp.isManualCurrent = true;
+      }
     });
   }
 
@@ -3914,6 +4151,17 @@ function initOKRListeners() {
 
 // Render dynamic elements inside the OKR Dashboard
 function renderOKRDashboard() {
+  // Auto-recalculate metrics for all key results if not manually overridden
+  okrData.forEach(o => {
+    if (o.keyResults) {
+      o.keyResults.forEach(kr => {
+        if (kr.metricType && kr.metricType !== "custom" && !kr.isManualCurrent) {
+          kr.current = calculateOkrMetric(o.quarter, kr.metricType);
+        }
+      });
+    }
+  });
+
   // Sync visual state of Quarter Selector Tabs
   document.querySelectorAll("[data-quarter]").forEach(btn => {
     if (btn.getAttribute("data-quarter") === activeOkrQuarter) {
@@ -4355,6 +4603,7 @@ function openAddKRModal(objId, event) {
   document.getElementById("okr-kr-parent-obj-name").innerText = `Thuộc Mục tiêu: ${obj.objective}`;
   
   // Set defaults
+  document.getElementById("okr-kr-metric").value = "custom";
   document.getElementById("okr-kr-name").value = "";
   document.getElementById("okr-kr-unit").value = "VND";
   document.getElementById("okr-kr-target").value = "";
@@ -4368,6 +4617,8 @@ function openAddKRModal(objId, event) {
     unit: "VND",
     target: 0,
     current: 0,
+    metricType: "custom",
+    isManualCurrent: false,
     monthlyActions: {},
     weeklyActions: {}
   };
@@ -4409,6 +4660,7 @@ function editKeyResult(krId, event) {
   document.getElementById("okr-kr-parent-obj-name").innerText = `Thuộc Mục tiêu: ${obj.objective}`;
   
   // Primary values
+  document.getElementById("okr-kr-metric").value = kr.metricType || "custom";
   document.getElementById("okr-kr-name").value = kr.name;
   document.getElementById("okr-kr-unit").value = kr.unit;
   document.getElementById("okr-kr-target").value = kr.target;
@@ -5701,8 +5953,11 @@ function generateExecutiveReport() {
   const currentComm = getCommitmentRevenueForPeriod(fromDate, toDate);
   const prevComm = getCommitmentRevenueForPeriod(prevFromDate, prevToDate);
 
-  const { totalRevenue: currentActual, orderCount: currentOrdersCount } = getActualOrdersMetricsForPeriod(fromDate, toDate);
-  const { totalRevenue: prevActual, orderCount: prevOrdersCount } = getActualOrdersMetricsForPeriod(prevFromDate, prevToDate);
+  const { totalRevenue: currentActual } = getActualOrdersMetricsForPeriod(fromDate, toDate);
+  const { totalRevenue: prevActual } = getActualOrdersMetricsForPeriod(prevFromDate, prevToDate);
+  
+  const currentOrdersCount = getActualOrdersCountExcludeGo(fromDate, toDate);
+  const prevOrdersCount = getActualOrdersCountExcludeGo(prevFromDate, prevToDate);
 
   const currentCompRate = currentComm > 0 ? (currentActual / currentComm) * 100 : 0;
   const prevCompRate = prevComm > 0 ? (prevActual / prevComm) * 100 : 0;
@@ -5772,10 +6027,7 @@ function generateExecutiveReport() {
       else if (groupName.includes("PHỄU") || groupName.includes("Lead")) accentColor = "#ef4444";
     }
 
-    const valLength = val ? val.trim().length : 0;
-    let valFontSize = "0.88rem";
-    if (valLength > 15) valFontSize = "0.7rem";
-    else if (valLength > 12) valFontSize = "0.75rem";
+    let valFontSize = "0.78rem";
 
     return `
       <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-left: 4px solid ${accentColor}; border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; justify-content: space-between; page-break-inside: avoid; min-height: 65px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box !important;">
@@ -5974,6 +6226,9 @@ function generateExecutiveReport() {
     } else if (status === "Không tái ký") {
       bg = "#fee2e2";
       text = "#991b1b";
+    } else if (status === "Hết hạn") {
+      bg = "#ffedd5";
+      text = "#c2410c";
     } else if (status === "Chưa liên hệ") {
       bg = "#e2e8f0";
       text = "#334155";
@@ -5989,7 +6244,13 @@ function generateExecutiveReport() {
       let dynamicItem = { ...item };
       const expDate = new Date(dynamicItem.expiration_date);
       const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-      if (diffDays < 0) dynamicItem.status = "Không tái ký";
+      if (diffDays < 0) {
+        if (item.status === "Không tái ký" || item.reason) {
+          dynamicItem.status = "Không tái ký";
+        } else {
+          dynamicItem.status = "Hết hạn";
+        }
+      }
       else if (diffDays <= 30) dynamicItem.status = "Sắp hết hạn";
       else dynamicItem.status = "Đang sử dụng";
       return dynamicItem;
@@ -6015,7 +6276,7 @@ function generateExecutiveReport() {
     ["Q1","Q2","Q3","Q4"].forEach(q => {
       targetYearData[q] = {
         months: {},
-        total: { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Không tái ký": 0, total: 0 }
+        total: { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Hết hạn": 0, "Không tái ký": 0, total: 0 }
       };
     });
 
@@ -6031,10 +6292,10 @@ function generateExecutiveReport() {
       else if (month >= 10 && month <= 12) q = "Q4";
 
       if (!targetYearData[q].months[month]) {
-        targetYearData[q].months[month] = { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Không tái ký": 0, total: 0 };
+        targetYearData[q].months[month] = { "Sắp hết hạn": 0, "Đang sử dụng": 0, "Hết hạn": 0, "Không tái ký": 0, total: 0 };
       }
 
-      if (["Sắp hết hạn", "Đang sử dụng", "Không tái ký"].includes(item.status)) {
+      if (["Sắp hết hạn", "Đang sử dụng", "Hết hạn", "Không tái ký"].includes(item.status)) {
         targetYearData[q].months[month][item.status]++;
         targetYearData[q].months[month].total++;
         targetYearData[q].total[item.status]++;
@@ -6101,6 +6362,7 @@ function generateExecutiveReport() {
                 <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center; width: 120px;">Thời gian</th>
                 <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Sắp hết hạn</th>
                 <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Đang sử dụng</th>
+                <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Hết hạn</th>
                 <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Không tái ký</th>
                 <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Tổng hết hạn</th>
                 <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center; background-color: rgba(16, 185, 129, 0.1); color: #10b981; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">Đã tái ký</th>

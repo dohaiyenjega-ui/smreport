@@ -760,6 +760,7 @@
             <option value="all">Tất cả tình trạng</option>
             <option value="Sắp hết hạn">Sắp hết hạn</option>
             <option value="Đang sử dụng">Đang sử dụng</option>
+            <option value="Hết hạn">Hết hạn</option>
             <option value="Không tái ký">Không tái ký</option>
           </select>
         </div>
@@ -815,6 +816,7 @@
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: left; width: 160px;">Thời gian</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Sắp hết hạn</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Đang sử dụng</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Hết hạn</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Không tái ký</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Tổng hết hạn</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center; background-color: rgba(16, 185, 129, 0.1); color: var(--color-green);">Đã tái ký (Thực tế)</th>
@@ -842,6 +844,7 @@
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: left; width: 160px;">Thời gian</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Sắp hết hạn</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Đang sử dụng</th>
+                  <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Hết hạn</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Không tái ký</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center;">Tổng hết hạn</th>
                   <th style="padding: 12px; border: 1px solid #e2e8f0; text-align: center; background-color: rgba(16, 185, 129, 0.1); color: var(--color-green);">Đã tái ký (Thực tế)</th>
@@ -1487,8 +1490,8 @@ function doOptions(e) {
         <input type="hidden" id="okr-obj-id">
         <div class="modal-body">
           <div class="filter-group">
-            <label for="okr-obj-quarter">Quý thực hiện <span class="text-danger">*</span></label>
-            <select id="okr-obj-quarter" class="filter-input" required>
+            <label for="okr-obj-quarter">Quý thực hiện</label>
+            <select id="okr-obj-quarter" class="filter-input">
               <option value="Q1">Quý 1 / 2026</option>
               <option value="Q2">Quý 2 / 2026</option>
               <option value="Q3">Quý 3 / 2026</option>
@@ -1496,8 +1499,8 @@ function doOptions(e) {
             </select>
           </div>
           <div class="filter-group">
-            <label for="okr-obj-name">Tên Mục Tiêu (Objective) <span class="text-danger">*</span></label>
-            <textarea id="okr-obj-name" class="filter-input" placeholder="Ví dụ: O1: Bứt phá doanh số Cloud & Mở rộng tệp khách hàng Marketing Nóng" required style="min-height: 80px;"></textarea>
+            <label for="okr-obj-name">Tên Mục Tiêu (Objective)</label>
+            <textarea id="okr-obj-name" class="filter-input" placeholder="Ví dụ: O1: Bứt phá doanh số Cloud & Mở rộng tệp khách hàng Marketing Nóng" style="min-height: 80px;"></textarea>
             <span style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 4px;">Nêu rõ mục tiêu chiến lược định hướng hành động trong quý.</span>
           </div>
         </div>
@@ -1526,22 +1529,42 @@ function doOptions(e) {
           </div>
 
           <div class="filter-group">
-            <label for="okr-kr-name">Tên Kết Quả Then Chốt (KR) <span class="text-danger">*</span></label>
-            <input type="text" id="okr-kr-name" class="filter-input" placeholder="Ví dụ: Đạt doanh số JEGA Cloud tối thiểu 300 triệu VND" required>
+            <label for="okr-kr-metric">Chỉ số đo lường mục tiêu</label>
+            <select id="okr-kr-metric" class="filter-input" style="background-color: var(--bg-secondary); color: #fff;">
+              <option value="custom" selected>Chỉ số khác</option>
+              <option value="revenue">Doanh thu (Tổng)</option>
+              <option value="revenue_business">Doanh thu Business</option>
+              <option value="revenue_retail">Doanh thu Retail</option>
+              <option value="revenue_interio_ai">Doanh thu Interio AI</option>
+              <option value="sales_closing_rate">Tỉ lệ chốt sales</option>
+              <option value="lead_to_demo">Lead to demo</option>
+              <option value="lead_mkt_to_demo">Lead MKT to demo</option>
+              <option value="lead_mkt_to_deal">Lead MKT to Deal</option>
+              <option value="lead_to_deal">Lead to Deal</option>
+              <option value="new_leads">Lead mới</option>
+              <option value="jcf_contracts">Hợp đồng JCF</option>
+              <option value="showroom_contracts">Hợp đồng ShowAI</option>
+              <option value="interio_contracts">Hợp đồng InterioAI</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="okr-kr-name">Tên Kết Quả Then Chốt (KR)</label>
+            <input type="text" id="okr-kr-name" class="filter-input" placeholder="Ví dụ: Đạt doanh số JEGA Cloud tối thiểu 300 triệu VND">
           </div>
 
           <div style="display:flex; gap:1rem; flex-wrap:wrap; width:100%;">
             <div class="filter-group" style="flex:1; min-width:140px;">
-              <label for="okr-kr-unit">Đơn vị đo lường <span class="text-danger">*</span></label>
-              <input type="text" id="okr-kr-unit" class="filter-input" placeholder="VND, Leads, %, Hợp đồng" required value="VND">
+              <label for="okr-kr-unit">Đơn vị đo lường</label>
+              <input type="text" id="okr-kr-unit" class="filter-input" placeholder="VND, Leads, %, Hợp đồng" value="VND">
             </div>
             <div class="filter-group" style="flex:1; min-width:140px;">
-              <label for="okr-kr-target">Giá trị Mục tiêu <span class="text-danger">*</span></label>
-              <input type="number" id="okr-kr-target" class="filter-input" placeholder="e.g. 300000000" required>
+              <label for="okr-kr-target">Giá trị Mục tiêu</label>
+              <input type="number" id="okr-kr-target" class="filter-input" placeholder="e.g. 300000000">
             </div>
             <div class="filter-group" style="flex:1; min-width:140px;">
-              <label for="okr-kr-current">Thực tế hiện tại <span class="text-danger">*</span></label>
-              <input type="number" id="okr-kr-current" class="filter-input" placeholder="e.g. 120000000" required value="0">
+              <label for="okr-kr-current">Thực tế hiện tại</label>
+              <input type="number" id="okr-kr-current" class="filter-input" placeholder="e.g. 120000000" value="0">
             </div>
           </div>
 
@@ -1558,27 +1581,27 @@ function doOptions(e) {
             <!-- Month Action Content Area -->
             <div class="okr-month-config-container">
               <div class="filter-group">
-                <label for="okr-kr-month-action" id="lbl-kr-month-action">Hành động tổng của Tháng này <span class="text-danger">*</span></label>
-                <input type="text" id="okr-kr-month-action" class="filter-input" placeholder="Chi tiết hành động tổng của tháng..." required>
+                <label for="okr-kr-month-action" id="lbl-kr-month-action">Hành động tổng của Tháng này</label>
+                <input type="text" id="okr-kr-month-action" class="filter-input" placeholder="Chi tiết hành động tổng của tháng...">
               </div>
               
               <div style="display:flex; flex-direction:column; gap:0.75rem;">
                 <label style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">Phân rã hành động 4 tuần</label>
                 <div class="filter-group" style="margin-bottom:0;">
-                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w1">Tuần 1 Action <span class="text-danger">*</span></label>
-                  <input type="text" id="okr-kr-w1" class="filter-input" placeholder="Công việc tuần 1..." required>
+                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w1">Tuần 1 Action</label>
+                  <input type="text" id="okr-kr-w1" class="filter-input" placeholder="Công việc tuần 1...">
                 </div>
                 <div class="filter-group" style="margin-bottom:0;">
-                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w2">Tuần 2 Action <span class="text-danger">*</span></label>
-                  <input type="text" id="okr-kr-w2" class="filter-input" placeholder="Công việc tuần 2..." required>
+                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w2">Tuần 2 Action</label>
+                  <input type="text" id="okr-kr-w2" class="filter-input" placeholder="Công việc tuần 2...">
                 </div>
                 <div class="filter-group" style="margin-bottom:0;">
-                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w3">Tuần 3 Action <span class="text-danger">*</span></label>
-                  <input type="text" id="okr-kr-w3" class="filter-input" placeholder="Công việc tuần 3..." required>
+                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w3">Tuần 3 Action</label>
+                  <input type="text" id="okr-kr-w3" class="filter-input" placeholder="Công việc tuần 3...">
                 </div>
                 <div class="filter-group" style="margin-bottom:0;">
-                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w4">Tuần 4 Action <span class="text-danger">*</span></label>
-                  <input type="text" id="okr-kr-w4" class="filter-input" placeholder="Công việc tuần 4..." required>
+                  <label style="font-size:0.75rem; color:#fff;" id="lbl-okr-kr-w4">Tuần 4 Action</label>
+                  <input type="text" id="okr-kr-w4" class="filter-input" placeholder="Công việc tuần 4...">
                 </div>
               </div>
             </div>
