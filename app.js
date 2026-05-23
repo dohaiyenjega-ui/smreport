@@ -144,6 +144,30 @@ async function loadDataFromGoogleSheets() {
     return val;
   }
 
+  function parseMDYDate(dateStr) {
+    if (!dateStr) return "";
+    const parts = String(dateStr).trim().split(" ");
+    const dateParts = parts[0].split("/");
+    if (dateParts.length < 3) return dateStr;
+    
+    let a = parseInt(dateParts[0], 10);
+    let b = parseInt(dateParts[1], 10);
+    let year = dateParts[2];
+    
+    if (a > 12) {
+      return dateStr;
+    }
+    if (b > 12) {
+      const month = String(a).padStart(2, '0');
+      const day = String(b).padStart(2, '0');
+      return `${day}/${month}/${year}`;
+    }
+    
+    const month = String(a).padStart(2, '0');
+    const day = String(b).padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  }
+
   try {
     if (leadsUrl && getGoogleSheetExportUrl(leadsUrl)) {
       let data = await fetchCSV(getGoogleSheetExportUrl(leadsUrl));
@@ -193,10 +217,15 @@ async function loadDataFromGoogleSheets() {
         let mapped = {};
         mapped.ma_kh = item.ma_kh || item["Mã KH"] || item["Mã khách hàng"] || "";
         mapped.sale_name = cleanSalesperson(item.sale_name || item["Người phụ trách"] || item["Sale hiện tại"] || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
-        mapped.expiration_date = item.expiration_date || item["Ngày hết hạn"] || item["Hết hạn"] || "";
-        mapped.activation_date = item.activation_date || item["Ngày kích hoạt"] || item["Ngày bắt đầu"] || "";
+        
+        let expDate = item.expiration_date || item["Ngày hết hạn"] || item["Hết hạn"] || "";
+        let actDate = item.activation_date || item["Ngày kích hoạt"] || item["Ngày bắt đầu"] || "";
+        
+        mapped.expiration_date = parseMDYDate(expDate);
+        mapped.activation_date = parseMDYDate(actDate);
+        
         mapped.status = item.status || item["Trạng thái"] || item["Tình trạng"] || "";
-        mapped.reason = item.reason || item["Lý do không tái ký"] || item["Lý do"] || "";
+        mapped.reason = item.reason || item["Lý do không tái ký"] || item["Lý do"] || item["Ghi chú"] || "";
         return mapped;
       });
       hasCustomData = true;
