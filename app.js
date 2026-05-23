@@ -176,7 +176,7 @@ async function loadDataFromGoogleSheets() {
         
         let revenue = item.doanh_thu || item["Doanh thu"] || item["Giá trị"] || item["Số tiền"] || 0;
         if (typeof revenue === 'string') {
-          revenue = Number(revenue.replace(/[^0-9.-]+/g,""));
+          revenue = Number(revenue.replace(/[^0-9-]/g,""));
         } else {
           revenue = Number(revenue);
         }
