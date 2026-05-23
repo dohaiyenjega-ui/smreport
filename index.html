@@ -44,6 +44,7 @@
         <i data-lucide="shopping-bag"></i>
         <span>Danh sách đơn hàng</span>
       </li>
+
       <li class="menu-item" data-section="key-accounts">
         <i data-lucide="star"></i>
         <span>Theo dõi Key Account</span>
@@ -413,6 +414,17 @@
           </div>
         </div>
 
+        <!-- Biểu đồ Xu hướng Doanh thu theo Ngày -->
+        <div class="chart-card col-12" id="card-daily-revenue-trend">
+          <div class="chart-card-title">
+            Xu hướng Doanh thu theo Ngày
+            <span>Thời gian thực | Phân tích biến động doanh thu chi tiết từng ngày</span>
+          </div>
+          <div class="chart-container" style="height: 320px; position: relative;">
+            <canvas id="chart-daily-revenue-trend"></canvas>
+          </div>
+        </div>
+
         <!-- General Conversion Funnel -->
         <div class="chart-card col-6">
           <div class="chart-card-title">
@@ -454,6 +466,71 @@
           </div>
           <div class="chart-container">
             <canvas id="chart-source-breakdown"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Dành riêng một dòng/lưới độc lập cho AI Sales Coach để tránh lệch lưới -->
+      <div class="charts-grid" style="margin-top: 1.5rem; border-top: 1px solid rgba(0,0,0,0.06); padding-top: 1.5rem;">
+
+        <!-- Column 6 (Left): Phễu Hoạt Động & Chuyển Đổi -->
+        <div class="chart-card col-6" id="card-coach-funnel">
+          <div class="chart-card-title" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0,0,0,0.08); padding-bottom: 12px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="filter" style="width: 18px; height: 18px; color: #006F7A;"></i>
+              <div>
+                <span style="font-size: 14px; font-weight: 700; color: #000000; display: block; text-transform: uppercase; letter-spacing: 0.5px;">Phễu Hoạt Động & Chuyển Đổi</span>
+                <span style="font-size: 11px; color: #475569; display: block; font-weight: 400; margin-top: 2px;">Tỷ lệ qua các bước trong phễu bán hàng</span>
+              </div>
+            </div>
+            <!-- Coach Rep Selector -->
+            <div>
+              <select id="ai-coach-rep-select" class="filter-select" style="background-color: #0f172a; color: #ffffff; border: 1px solid rgba(0, 111, 122, 0.4); padding: 6px 12px; border-radius: 6px; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; outline: none; transition: border 0.2s;">
+                <option value="Nguyễn Trọng Tín">Nguyễn Trọng Tín (Sales Cloud)</option>
+                <option value="Phan Ngọc Thúy">Phan Ngọc Thúy (Sales Cloud)</option>
+                <option value="Lê Thị Hoài Phúc">Lê Thị Hoài Phúc (Sales Cloud)</option>
+                <option value="Đỗ Thị Hải Yến">Đỗ Thị Hải Yến (Sales Cloud)</option>
+                <option value="Võ Gia Hân">Võ Gia Hân (Sales Cloud)</option>
+              </select>
+            </div>
+          </div>
+          <div id="coach-funnel-container" style="display: flex; flex-direction: column; gap: 14px; flex-grow: 1; justify-content: center;">
+            <!-- Dynamically filled by JS -->
+          </div>
+        </div>
+
+        <!-- Column 6 (Right): Bản Đồ Năng Lực Bán Hàng -->
+        <div class="chart-card col-6" id="card-coach-skills">
+          <div class="chart-card-title" style="border-bottom: 1px solid rgba(0,0,0,0.08); padding-bottom: 12px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="award" style="width: 18px; height: 18px; color: #006F7A;"></i>
+              <div>
+                <span style="font-size: 14px; font-weight: 700; color: #000000; display: block; text-transform: uppercase; letter-spacing: 0.5px;">Bản Đồ Năng Lực Bán Hàng</span>
+                <span style="font-size: 11px; color: #475569; display: block; font-weight: 400; margin-top: 2px;">Đánh giá 4 nhóm kỹ năng cốt lõi</span>
+              </div>
+            </div>
+          </div>
+          <div id="coach-skills-container" style="display: flex; flex-direction: column; gap: 16px; flex-grow: 1; justify-content: center;">
+            <!-- Dynamically filled by JS -->
+          </div>
+        </div>
+
+        <!-- Column 12 (Bottom): Trợ Lý AI Mentor Bán Hàng -->
+        <div class="chart-card col-12" id="card-coach-ai-feedback" style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.05) 0%, rgba(0, 111, 122, 0.08) 100%); border: 1px solid rgba(20, 184, 166, 0.35);">
+          <div class="chart-card-title" style="border-bottom: 1px solid rgba(20, 184, 166, 0.15); padding-bottom: 12px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="background: rgba(20, 184, 166, 0.1); border: 1px solid rgba(20, 184, 166, 0.3); border-radius: 6px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #006F7A;">
+                <i data-lucide="sparkles" style="width: 18px; height: 18px;"></i>
+              </div>
+              <div>
+                <span style="font-size: 15px; font-weight: 700; color: #000000; display: block; text-transform: uppercase; letter-spacing: 0.5px;">Trợ Lý AI Mentor Bán Hàng (Strategic AI Coach)</span>
+                <span style="font-size: 11px; color: #334155; display: block; font-weight: 400; margin-top: 2px;">Phân tích bức tranh toàn cảnh chiến lược &amp; Đề xuất hành động từ Giám đốc Huấn luyện Sales</span>
+              </div>
+            </div>
+          </div>
+          <div id="coach-ai-feedback-container" style="display: flex; flex-direction: column; gap: 14px; flex-grow: 1; color: #000000;">
+            <!-- Dynamically filled by JS -->
           </div>
         </div>
 
@@ -1026,7 +1103,6 @@
         </div>
       </div>
     </section>
-    </section>
 
     <!-- SECTION 7: AI PROJECTS TRACKING -->
     <section id="section-ai-projects" class="page-section">
@@ -1146,8 +1222,6 @@
         </button>
       </div>
     </div>
-  </div>
-
   </div>
 
   <!-- Key Account Adding & Editing Modal Dialog -->
@@ -2016,6 +2090,8 @@ function doOptions(e) {
 
   <!-- Loaded Javascript Data File -->
   <script src="data.js"></script>
+  <!-- html2canvas for exporting report as image -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- Application Logic Controller -->
   <script src="app.js"></script>
   

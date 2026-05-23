@@ -202,7 +202,8 @@ let paginationState = {
 let charts = {
   salesRanking: null,
   productCategories: null,
-  sourceBreakdown: null
+  sourceBreakdown: null,
+  dailyRevenueTrend: null
 };
 
 // ==========================================
@@ -648,9 +649,67 @@ function getLeadsMetricsForPeriod(startDate, endDate) {
       if (demoStages.includes(rel)) {
         demoLeads++;
       }
+    }
+  });
+
+  // Calculate Đơn Nóng (Hot Orders): match ma_kh between LEAD_REPORT and ORDER_REPORT
+  // where both purchase date and creation date are in the period.
+  ordersData.forEach(order => {
+    // Match salesperson filter
+    if (filterState.sales !== "all" && order.sales !== filterState.sales) return;
+    
+    // Match global productGroup filter
+    if (filterState.productGroup !== "all") {
+      const cat = getProductCategory(order.san_pham);
+      if (filterState.productGroup === "cloud" && cat !== "JEGA Cloud") return;
+      if (filterState.productGroup === "visual" && cat !== "JEGA Visual") return;
+    }
+    
+    // Match global productLine filter
+    if (filterState.productLine !== "all") {
+      const line = getProductLine(order.san_pham);
+      if (line !== filterState.productLine) return;
+    }
+    
+    const orderDate = parseDate(order.ngay_mua);
+    if (orderDate && (!startDate || orderDate >= startDate) && (!endDate || orderDate <= endDate)) {
+      // Find if there is a lead with same ma_kh created in the period
+      const hasHotLead = leadsData.some(lead => {
+        if (lead.ma_kh !== order.ma_kh) return false;
+        
+        // Match salesperson filter
+        if (filterState.sales !== "all" && lead.sales !== filterState.sales) return false;
+        
+        // Match global productGroup & line filters (mapped via ordersData)
+        if (filterState.productGroup !== "all" || filterState.productLine !== "all") {
+          const leadOrders = ordersData.filter(o => o.ma_kh === lead.ma_kh);
+          if (leadOrders.length === 0) return false;
+          
+          const matchesGroup = filterState.productGroup === "all" || leadOrders.some(o => {
+            const cat = getProductCategory(o.san_pham);
+            return (filterState.productGroup === "cloud" && cat === "JEGA Cloud") ||
+                   (filterState.productGroup === "visual" && cat === "JEGA Visual");
+          });
+          
+          const matchesLine = filterState.productLine === "all" || leadOrders.some(o => getProductLine(o.san_pham) === filterState.productLine);
+          
+          if (!matchesGroup || !matchesLine) return false;
+        }
+        
+        // Match source filter
+        if (filterState.leadSourceGroup !== "all") {
+          const grp = getLeadSourceGroup(lead.nguon);
+          if (filterState.leadSourceGroup === "sales" && grp !== "Sales") return false;
+          if (filterState.leadSourceGroup === "mkt-hot" && grp !== "Marketing Nóng") return false;
+          if (filterState.leadSourceGroup === "referral" && grp !== "Giới thiệu") return false;
+          if (filterState.leadSourceGroup === "mkt-other" && grp !== "Marketing khác") return false;
+        }
+        
+        const createdDate = parseDate(lead.ngay_tao);
+        return createdDate && (!startDate || createdDate >= startDate) && (!endDate || createdDate <= endDate);
+      });
       
-      // Đơn Nóng: Created date is within the filtered period and relationship is "Ký hợp đồng"
-      if (rel === "Ký hợp đồng") {
+      if (hasHotLead) {
         signedLeads++;
       }
     }
@@ -1783,6 +1842,160 @@ function updateCharts() {
       }
     }
   });
+
+  // --- CHART 4: DAILY REVENUE TREND ---
+  let startDate = filterState.fromDate;
+  let endDate = filterState.toDate;
+
+  if (!startDate || !endDate) {
+    // Fallback to min and max date of filteredOrders
+    let minDate = null;
+    let maxDate = null;
+    filteredOrders.forEach(o => {
+      const d = parseDate(o.ngay_mua);
+      if (d) {
+        if (!minDate || d < minDate) minDate = d;
+        if (!maxDate || d > maxDate) maxDate = d;
+      }
+    });
+    // Default to May 1 - May 31, 2026 if no data
+    startDate = minDate || new Date(2026, 4, 1);
+    endDate = maxDate || new Date(2026, 4, 31);
+  }
+
+  // Generate list of Date objects day by day
+  const dateList = [];
+  let curr = new Date(startDate);
+  const last = new Date(endDate);
+  
+  // Safely limit to maximum 95 days to avoid overloading the UI
+  let loopCount = 0;
+  while (curr <= last && loopCount < 100) {
+    dateList.push(new Date(curr));
+    curr.setDate(curr.getDate() + 1);
+    loopCount++;
+  }
+
+  // Create formatted labels "DD/MM"
+  const dailyLabels = dateList.map(d => {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${dd}/${mm}`;
+  });
+
+  // Group filtered orders revenue per day
+  const revenuePerDay = {};
+  dateList.forEach(d => {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const key = `${dd}/${mm}/${yyyy}`;
+    revenuePerDay[key] = 0;
+  });
+
+  filteredOrders.forEach(o => {
+    const d = parseDate(o.ngay_mua);
+    if (d) {
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const key = `${dd}/${mm}/${yyyy}`;
+      if (key in revenuePerDay) {
+        revenuePerDay[key] += o.doanh_thu;
+      }
+    }
+  });
+
+  const dailyDataValues = dateList.map(d => {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const key = `${dd}/${mm}/${yyyy}`;
+    return revenuePerDay[key];
+  });
+
+  const dailyTrendCanvas = document.getElementById("chart-daily-revenue-trend");
+  if (dailyTrendCanvas) {
+    const dailyCtx = dailyTrendCanvas.getContext("2d");
+    
+    // Create beautiful Teal linear gradient for the area fill under the line
+    let dailyGradient = "rgba(0, 111, 122, 0.15)";
+    if (dailyCtx && typeof dailyCtx.createLinearGradient === "function") {
+      const gradient = dailyCtx.createLinearGradient(0, 0, 0, 300);
+      gradient.addColorStop(0, "rgba(0, 111, 122, 0.4)");  // Semi-transparent deep teal
+      gradient.addColorStop(1, "rgba(0, 111, 122, 0.0)");  // Fades out to transparent
+      dailyGradient = gradient;
+    }
+
+    if (charts.dailyRevenueTrend) charts.dailyRevenueTrend.destroy();
+    
+    charts.dailyRevenueTrend = new Chart(dailyTrendCanvas, {
+      type: 'line',
+      data: {
+        labels: dailyLabels,
+        datasets: [{
+          label: 'Doanh thu (VND)',
+          data: dailyDataValues,
+          borderColor: '#006F7A',          // Deep Teal line
+          backgroundColor: dailyGradient,   // Area fill gradient
+          borderWidth: 3,
+          fill: true,
+          tension: 0.35,                   // Smooth spline curve
+          pointBackgroundColor: '#006F7A',
+          pointBorderColor: '#FFFFFF',
+          pointBorderWidth: 1.5,
+          pointRadius: 3.5,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: '#14B8A6', // Vibrant Teal hover highlight
+          pointHoverBorderColor: '#FFFFFF',
+          pointHoverBorderWidth: 2
+        }]
+      },
+      options: {
+        ...baseChartOptions,
+        scales: {
+          x: {
+            grid: { color: 'rgba(0, 111, 122, 0.04)' },
+            ticks: { color: navyColors.text, font: { family: 'Montserrat', size: 10 } }
+          },
+          y: {
+            grid: { color: 'rgba(0, 111, 122, 0.06)' },
+            ticks: { 
+              color: navyColors.text, 
+              font: { family: 'Montserrat', size: 10 },
+              callback: (v) => {
+                if (v >= 1000000) return `${(v / 1000000).toFixed(1).replace(".0", "")}M`;
+                if (v >= 1000) return `${(v / 1000).toFixed(0)}k`;
+                return v;
+              }
+            }
+          }
+        },
+        plugins: {
+          ...baseChartOptions.plugins,
+          tooltip: {
+            backgroundColor: '#0f172a',
+            titleColor: '#ffffff',
+            bodyColor: '#ffffff',
+            padding: 10,
+            borderRadius: 6,
+            displayColors: false,
+            callbacks: {
+              label: (context) => {
+                const val = context.raw;
+                return `Doanh thu: ${val.toLocaleString("vi-VN")} ₫`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // Update AI Sales Coach Dashboard
+  if (typeof updateAICoachDashboard === "function") {
+    updateAICoachDashboard();
+  }
 }
 
 // ==========================================
@@ -1904,8 +2117,11 @@ function generateAIInsights() {
   const container = document.getElementById("ai-insights-container");
   container.innerHTML = "";
   
+  const fromDate = filterState.fromDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const toDate = filterState.toDate || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+  const metrics = getLeadsMetricsForPeriod(fromDate, toDate);
+  const signedLeads = metrics.signedLeads;
   const totalLeads = filteredLeads.length;
-  const signedLeads = filteredLeads.filter(l => l.moi_quan_he === "Ký hợp đồng").length;
   const conversionRate = totalLeads > 0 ? (signedLeads / totalLeads) * 100 : 0;
   
   // Calculate source performance in leads
@@ -6740,6 +6956,311 @@ function generateExecutiveReport() {
 }
 
 // Make callback functions accessible in HTML onclick attributes globally
+window.editAIProject = editAIProject;
+window.deleteAIProject = deleteAIProject;
+window.openAddAIProjectModal = openAddAIProjectModal;
+window.generateExecutiveReport = generateExecutiveReport;
+
+// ==========================================
+// 8. AI SALES COACH & MENTORING ADVISOR
+// ==========================================
+
+function updateAICoachDashboard() {
+  const selectEl = document.getElementById("ai-coach-rep-select");
+  if (selectEl && !selectEl.dataset.listenerBound) {
+    selectEl.addEventListener("change", () => {
+      updateAICoachDashboard();
+    });
+    selectEl.dataset.listenerBound = "true";
+  }
+
+  const repName = selectEl ? selectEl.value : "Nguyễn Trọng Tín";
+  
+  const funnelContainer = document.getElementById("coach-funnel-container");
+  const skillsContainer = document.getElementById("coach-skills-container");
+  const feedbackContainer = document.getElementById("coach-ai-feedback-container");
+  
+  if (!funnelContainer || !skillsContainer || !feedbackContainer) return;
+
+  // Filter Leads assigned to selected Sales Rep
+  let repLeads = [];
+  if (typeof filteredLeads !== 'undefined') {
+    repLeads = filteredLeads.filter(l => l.sales === repName);
+  } else if (typeof leads !== 'undefined') {
+    repLeads = leads.filter(l => l.sales === repName);
+  }
+
+  // Filter Orders assigned to selected Sales Rep
+  let repOrders = [];
+  if (typeof filteredOrders !== 'undefined') {
+    repOrders = filteredOrders.filter(o => o.sales === repName);
+  } else if (typeof orders !== 'undefined') {
+    repOrders = orders.filter(o => o.sales === repName);
+  }
+
+  // Funnel calculations
+  const totalLeads = repLeads.length;
+  const quanTamList = ["Quan tâm", "Hẹn demo", "Demo", "Báo giá", "Dùng thử", "Gửi hợp đồng", "Đặt cọc", "Ký hợp đồng", "Thất bại"];
+  const quanTamCount = repLeads.filter(l => quanTamList.includes(l.moi_quan_he)).length;
+  
+  const demoList = ["Demo", "Báo giá", "Dùng thử", "Gửi hợp đồng", "Đặt cọc", "Ký hợp đồng", "Thất bại"];
+  const demoCount = repLeads.filter(l => demoList.includes(l.moi_quan_he)).length;
+  
+  const baoGiaList = ["Báo giá", "Dùng thử", "Gửi hợp đồng", "Đặt cọc", "Ký hợp đồng", "Thất bại"];
+  const baoGiaCount = repLeads.filter(l => baoGiaList.includes(l.moi_quan_he)).length;
+  
+  const businessRetailOrders = repOrders.filter(o => getProductLine(o.san_pham) !== "Go");
+  const signedCount = businessRetailOrders.length;
+
+  const totalRevenue = businessRetailOrders.reduce((sum, o) => sum + (o.doanh_thu || 0), 0);
+  const avgTicket = signedCount > 0 ? (totalRevenue / signedCount) : 0;
+
+  // Funnel rates
+  const hookRate = totalLeads > 0 ? (quanTamCount / totalLeads) : 0;
+  const demoSkillRate = quanTamCount > 0 ? (demoCount / quanTamCount) : 0;
+  const closeRate = demoCount > 0 ? (signedCount / demoCount) : 0;
+
+  // Render Column 1: Funnel HTML
+  let funnelHtml = `
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <!-- Total Leads -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <span style="font-size: 13px; color: #000000; font-weight: 500;">Lead Được Giao</span>
+        <span style="font-weight: 700; color: #000000; font-size: 15px;">${totalLeads} Lead</span>
+      </div>
+      <!-- Success Calls -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <span style="font-size: 13px; color: #000000; font-weight: 500;">Đã Tiếp Cận</span>
+        <span style="font-weight: 700; color: #000000; font-size: 15px;">${quanTamCount} (${(hookRate*100).toFixed(0)}%)</span>
+      </div>
+      <!-- Demo Count -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <span style="font-size: 13px; color: #000000; font-weight: 500;">Hẹn Demo Thành Công</span>
+        <span style="font-weight: 700; color: #000000; font-size: 15px;">${demoCount} (${(demoSkillRate*100).toFixed(0)}%)</span>
+      </div>
+      <!-- Signed Count -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <span style="font-size: 13px; color: #000000; font-weight: 500;">Chốt Ký Hợp Đồng</span>
+        <span style="font-weight: 700; color: #000000; font-size: 15px;">${signedCount} (${(closeRate*100).toFixed(0)}%)</span>
+      </div>
+      <!-- Total Revenue -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0, 111, 122, 0.08); padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(0, 111, 122, 0.25); margin-top: 6px;">
+        <span style="font-size: 13px; color: #000000; font-weight: 700;">Tổng Doanh Thu</span>
+        <span style="font-weight: 800; color: #000000; font-size: 16px;">${(totalRevenue/1000000).toFixed(1).replace(".0","")}tr VND</span>
+      </div>
+    </div>
+  `;
+  funnelContainer.innerHTML = funnelHtml;
+
+  // Determine skill levels and badges
+  const getBadgeHtml = (rate, t1, t2) => {
+    if (rate >= t1) return `<span style="background: rgba(34, 197, 94, 0.15); color: #15803d; border: 1px solid rgba(34, 197, 94, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Xuất sắc</span>`;
+    if (rate >= t2) return `<span style="background: rgba(245, 158, 11, 0.15); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Tốt</span>`;
+    return `<span style="background: rgba(239, 68, 68, 0.15); color: #b91c1c; border: 1px solid rgba(239, 68, 68, 0.3); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Nghẽn (Cần sửa)</span>`;
+  };
+
+  // Render Column 2: Key Skills Assessment
+  const hookBadge = getBadgeHtml(hookRate, 0.70, 0.50);
+  const demoBadge = getBadgeHtml(demoSkillRate, 0.60, 0.40);
+  const closeBadge = getBadgeHtml(closeRate, 0.30, 0.15);
+  const upsellBadge = getBadgeHtml(avgTicket / 10000000, 1.2, 0.7); // 12M and 7M standards
+
+  let skillsHtml = `
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <!-- Hooking Skill -->
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 12px; font-weight: 700; color: #000000;">1. Khai phá & Tiếp cận (Hooking)</span>
+          ${hookBadge}
+        </div>
+        <div style="background: rgba(0,0,0,0.08); height: 8px; border-radius: 4px; overflow: hidden;">
+          <div style="width: ${Math.min(hookRate * 100, 100)}%; background: #3B82F6; height: 100%; border-radius: 4px;"></div>
+        </div>
+      </div>
+      
+      <!-- Demo Skill -->
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 12px; font-weight: 700; color: #000000;">2. Demo & Thuyết phục (Presentation)</span>
+          ${demoBadge}
+        </div>
+        <div style="background: rgba(0,0,0,0.08); height: 8px; border-radius: 4px; overflow: hidden;">
+          <div style="width: ${Math.min(demoSkillRate * 100, 100)}%; background: #F59E0B; height: 100%; border-radius: 4px;"></div>
+        </div>
+      </div>
+
+      <!-- Closing Skill -->
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 12px; font-weight: 700; color: #000000;">3. Chốt HĐ & Xử lý từ chối (Closing)</span>
+          ${closeBadge}
+        </div>
+        <div style="background: rgba(0,0,0,0.08); height: 8px; border-radius: 4px; overflow: hidden;">
+          <div style="width: ${Math.min(closeRate * 100, 100)}%; background: #8B5CF6; height: 100%; border-radius: 4px;"></div>
+        </div>
+      </div>
+
+      <!-- Upsell Skill -->
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 12px; font-weight: 700; color: #000000;">4. Trị giá đơn hàng (Upsell / Size)</span>
+          ${upsellBadge}
+        </div>
+        <div style="font-size: 12px; color: #000000; margin-top: 2px;">
+          Đơn hàng trung bình: <strong style="color: #000000;">${(avgTicket/1000000).toFixed(1).replace(".0","")} triệu VND</strong>
+        </div>
+      </div>
+    </div>
+  `;
+  skillsContainer.innerHTML = skillsHtml;
+
+  // Render Column 3: AI Coaching Feedback
+  let feedbackHtml = "";
+  if (repName === "Nguyễn Trọng Tín") {
+    feedbackHtml = `
+      <div style="display: flex; flex-direction: column; gap: 16px; font-size: 13.5px; line-height: 1.6; color: #000000;">
+        <div style="background: rgba(0, 111, 122, 0.04); padding: 16px; border-radius: 8px; border: 1px solid rgba(0, 111, 122, 0.15);">
+          <strong style="color: #006F7A; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="globe" style="width: 16px; height: 16px;"></i> Bức Tranh Tổng Thể (The Big Picture)
+          </strong>
+          Nguyễn Trọng Tín hiện là <strong>"Ngôi sao chốt deal" (Elite Closer)</strong> xuất sắc nhất của toàn đội với kỹ năng thương thảo đỉnh cao, khả năng thiết lập giá trị sắc bén và thuyết phục khách hàng doanh nghiệp lớn. Nhờ đó, Tín duy trì giá trị đơn hàng trung bình vượt trội ở mức <strong>${(avgTicket/1000000).toFixed(1).replace(".0","")} triệu VND</strong>. Tuy nhiên, phân tích sâu cho thấy Tín đang bị giới hạn bởi chiến lược bán hàng thụ động: <strong>hội chứng kén chọn cơ hội (Cherry-Picking)</strong>. Tín có xu hướng "bỏ rơi" các lead ấm hoặc lạnh ở đầu phễu để dồn toàn lực săn đón các lead cực nóng hoặc các deal có quy mô lớn rõ rệt. Dưới góc nhìn quản trị doanh nghiệp, đây là một điểm mù nghiêm trọng: nó làm lãng phí lớn ngân sách Marketing và làm tắc nghẽn cơ hội tạo doanh số từ các tệp khách hàng tiềm năng khác.
+        </div>
+        
+        <div style="background: rgba(239, 68, 68, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.15);">
+          <strong style="color: #b91c1c; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="shield-alert" style="width: 16px; height: 16px;"></i> Điểm Nghẽn Hệ Thống (Bottleneck)
+          </strong>
+          Hiệu suất đầu phễu rất thấp so với năng lực thực tế. Tỷ lệ tiếp cận lead được giao (Hook Rate) chỉ đạt <strong>${(hookRate*100).toFixed(0)}%</strong>. Tín đang bỏ qua lượng lớn cơ hội tiềm năng chỉ vì chúng chưa bộc lộ nhu cầu mua ngay lập tức, khiến phễu hoạt động bị thu hẹp đáng kể.
+        </div>
+
+        <div style="background: rgba(139, 92, 246, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.15);">
+          <strong style="color: #6d28d9; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="sliders" style="width: 16px; height: 16px;"></i> Định Hướng Chiến Lược Bán Hàng
+          </strong>
+          Chuyển đổi tư duy từ "Người săn lùng cơ hội chín" sang <strong>"Người kiến tạo nhu cầu" (Demand Creator)</strong>. Tín cần chủ động tiếp cận nhóm lead ở giai đoạn sớm, sử dụng kỹ năng tư vấn giải pháp sắc bén của mình để khai phá nỗi đau (Pain Point) và nuôi dưỡng nhu cầu thay vì chỉ đợi chốt các deal sẵn có. Đồng thời, Tín cần đóng vai trò dẫn dắt thế hệ sales mới thông qua các hoạt động chia sẻ kỹ năng.
+        </div>
+
+        <div style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.08) 0%, rgba(20, 184, 166, 0.15) 100%); padding: 18px 20px; border-radius: 10px; border-left: 5px solid #0d9488;">
+          <strong style="color: #006F7A; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="trending-up" style="width: 18px; height: 18px;"></i> Action Plan Huấn Luyện Thực Chiến
+          </strong>
+          1. <span style="color: #000000; font-weight: 700;">Đào tạo Provocative Outbound Call:</span> Huấn luyện kịch bản mở lời đánh thẳng vào "chi phí cơ hội của việc trì hoãn" (Cost of Inaction) để lôi cuốn lead lạnh thay vì chào mời tính năng sản phẩm.<br>
+          2. <span style="color: #000000; font-weight: 700;">Mở rộng đáy phễu:</span> Cam kết gia tăng 20% số lượng cuộc gọi tiếp cận nhóm lead ấm/lạnh mỗi tuần. Phải biến đáy phễu chốt đơn sắc bén của Tín thành điểm đến của nhiều lead hơn.<br>
+          3. <span style="color: #000000; font-weight: 700;">Kế hoạch chuyển giao kiến thức:</span> Yêu cầu Tín tổ chức 1 buổi shadowing thực tế/chia sẻ kỹ năng chốt deal cho sales mới hàng tuần để nâng cao tinh thần đóng góp cho đội ngũ.
+        </div>
+      </div>
+    `;
+  } else if (repName === "Phan Ngọc Thúy") {
+    feedbackHtml = `
+      <div style="display: flex; flex-direction: column; gap: 16px; font-size: 13.5px; line-height: 1.6; color: #000000;">
+        <div style="background: rgba(0, 111, 122, 0.04); padding: 16px; border-radius: 8px; border: 1px solid rgba(0, 111, 122, 0.15);">
+          <strong style="color: #006F7A; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="globe" style="width: 16px; height: 16px;"></i> Bức Tranh Tổng Thể (The Big Picture)
+          </strong>
+          Phan Ngọc Thúy là <strong>"Cỗ máy khai thác phễu" (Funnel Champion)</strong> với năng lượng hành động vượt trội, kỹ năng xây dựng thiện cảm, lắng nghe và thấu hiểu khách hàng xuất sắc. Thúy dẫn đầu toàn đội về tỷ lệ kéo khách hàng vào xem Demo lên tới <strong>${(demoSkillRate*100).toFixed(0)}%</strong>. Tuy nhiên, Thúy đang bị mắc kẹt hoàn toàn trong <strong>"Bẫy Người bán hàng thân thiện" (The Nice Salesperson Trap)</strong>. Thúy quá chú trọng vào việc tạo mối quan hệ tốt đẹp, trả lời mọi câu hỏi kỹ thuật một cách tận tụy nhưng lại thiếu đi sự quyết đoán thương mại (Commercial Edge). Cô sợ việc đẩy khách hàng vào trạng thái cam kết thanh toán sẽ phá hỏng mối quan hệ tốt đẹp đã xây dựng, tạo ra một tệp lớn khách hàng "vui vẻ, nhiệt tình, thích sản phẩm nhưng... mãi không ký hợp đồng".
+        </div>
+        
+        <div style="background: rgba(239, 68, 68, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.15);">
+          <strong style="color: #b91c1c; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="shield-alert" style="width: 16px; height: 16px;"></i> Điểm Nghẽn Hệ Thống (Bottleneck)
+          </strong>
+          Rò rỉ doanh thu cực kỳ lớn ở đáy phễu: Tỷ lệ chốt hợp đồng sau Demo chỉ vỏn vẹn <strong>${(closeRate*100).toFixed(0)}%</strong>. Đây là mức rò rỉ rất lãng phí. Công sức và thời gian Thúy đầu tư khai phá đầu phễu đang bị "bốc hơi" ở bước ra quyết định cuối cùng, biến cô thành một chuyên viên hỗ trợ sản phẩm miễn phí cho khách hàng hơn là một người mang lại doanh thu.
+        </div>
+
+        <div style="background: rgba(139, 92, 246, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.15);">
+          <strong style="color: #6d28d9; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="sliders" style="width: 16px; height: 16px;"></i> Định Hướng Chiến Lược Bán Hàng
+          </strong>
+          Chuyển dịch vai trò từ "Người tư vấn thân thiện" sang <strong>"Chuyên gia tư vấn có uy quyền" (Trusted Advisor with Commercial Authority)</strong>. Thúy phải xác định rõ: Buổi Demo không phải là một buổi học sản phẩm, đó là một <strong>cuộc thảo luận kinh doanh giải quyết bài toán tài chính</strong>. Cô phải thiết lập cam kết của khách hàng từ trước khi tiến hành Demo bằng cách thống nhất rõ các tiêu chí thành công và bước tiếp theo cụ thể để ký hợp đồng.
+        </div>
+
+        <div style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.08) 0%, rgba(20, 184, 166, 0.15) 100%); padding: 18px 20px; border-radius: 10px; border-left: 5px solid #0d9488;">
+          <strong style="color: #006F7A; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="trending-up" style="width: 18px; height: 18px;"></i> Action Plan Huấn Luyện Thực Chiến
+          </strong>
+          1. <span style="color: #000000; font-weight: 700;">Áp dụng Mutual Action Plan (MAP):</span> Bắt buộc Thúy phải cùng khách hàng ký thỏa thuận lộ trình hợp tác gồm 3 bước rõ ràng (Thử nghiệm -> Đánh giá kỹ thuật -> Ký HĐ) ngay khi mở đầu buổi Demo.<br>
+          2. <span style="color: #000000; font-weight: 700;">Huấn luyện phương pháp LAER:</span> Đào tạo chuyên sâu kỹ năng xử lý từ chối về giá trị và giá cả theo quy trình LAER (Listen - Acknowledge - Explore - Respond) để hóa giải khéo léo nhưng dứt khoát tâm lý trì hoãn của đối tác.<br>
+          3. <span style="color: #000000; font-weight: 700;">Chiến dịch Co-Closing:</span> Chỉ đạo Quản lý trực tiếp hoặc Tín trực tiếp đồng hành (Co-close) trong 3 thương vụ lớn đang trì hoãn của Thúy để tạo đà vượt ngưỡng tâm lý chốt hợp đồng.
+        </div>
+      </div>
+    `;
+  } else if (repName === "Lê Thị Hoài Phúc") {
+    feedbackHtml = `
+      <div style="display: flex; flex-direction: column; gap: 16px; font-size: 13.5px; line-height: 1.6; color: #000000;">
+        <div style="background: rgba(0, 111, 122, 0.04); padding: 16px; border-radius: 8px; border: 1px solid rgba(0, 111, 122, 0.15);">
+          <strong style="color: #006F7A; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="globe" style="width: 16px; height: 16px;"></i> Bức Tranh Tổng Thể (The Big Picture)
+          </strong>
+          Lê Thị Hoài Phúc là <strong>"Biểu tượng của sự ổn định và kỷ luật quy trình" (Process Champion)</strong>. Phúc sở hữu một phễu chuyển đổi cân bằng, hài hòa lý tưởng ở mọi phân khúc, chứng minh kỹ năng chuyên môn rất bài bản, chuẩn mực và khả năng tạo lòng tin cậy sâu sắc đối với mọi khách hàng tiếp xúc. Tuy nhiên, rào cản chí tử hạn chế sự bứt phá của Phúc không nằm ở kỹ năng, mà ở tư duy giới hạn về tài chính: <strong>Bán hàng dựa trên túi tiền của mình (Selling from your own pocket)</strong>. Phúc có thói quen tự phán đoán rằng khách hàng sẽ thấy giải pháp quá đắt đỏ hoặc sợ bị từ chối khi đưa ra báo giá cao. Vì vậy, cô chủ động lái khách hàng vào vùng an toàn bằng việc tư vấn các gói sản phẩm giá trị thấp (Lite/Go) để tăng khả năng chốt đơn nhanh.
+        </div>
+        
+        <div style="background: rgba(239, 68, 68, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.15);">
+          <strong style="color: #b91c1c; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="shield-alert" style="width: 16px; height: 16px;"></i> Điểm Nghẽn Hệ Thống (Bottleneck)
+          </strong>
+          Giá trị đơn hàng trung bình (Average Ticket Size) ở mức rất thấp: chỉ đạt <strong>${(avgTicket/1000000).toFixed(1).replace(".0","")} triệu VND</strong>. Mặc dù Phúc tốn cùng lượng thời gian thương thảo và công sức như các sales khác, nhưng giá trị dòng tiền đem về lại thấp nhất đội ngũ. Đây là điểm nghẽn hiệu suất cực kỳ uổng phí đối với một nhân viên có tỷ lệ chốt đơn rất ổn định.
+        </div>
+
+        <div style="background: rgba(139, 92, 246, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.15);">
+          <strong style="color: #6d28d9; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="sliders" style="width: 16px; height: 16px;"></i> Định Hướng Chiến Lược Bán Hàng
+          </strong>
+          Chuyển dịch mô hình bán hàng từ Product Selling (Bán sản phẩm đơn lẻ) sang <strong>"Value-Based Business Architecture" (Thiết lập giải pháp giá trị cho doanh nghiệp)</strong>. Phúc cần triệt để ứng dụng nguyên lý <strong>Neo giá cao (High-Anchor Pricing)</strong>: Luôn đề xuất và chứng minh ROI của gói giải pháp toàn diện cao nhất (Premium/Enterprise) trước tiên. Chỉ khi khách hàng từ chối do rào cản ngân sách thực sự, Phúc mới trượt dần xuống các gói thấp hơn.
+        </div>
+
+        <div style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.08) 0%, rgba(20, 184, 166, 0.15) 100%); padding: 18px 20px; border-radius: 10px; border-left: 5px solid #0d9488;">
+          <strong style="color: #006F7A; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="trending-up" style="width: 18px; height: 18px;"></i> Action Plan Huấn Luyện Thực Chiến
+          </strong>
+          1. <span style="color: #000000; font-weight: 700;">Áp dụng kỹ thuật Neo Giá Cao:</span> Yêu cầu Phúc chuẩn bị báo giá luôn bắt đầu bằng phương án Premium giải quyết triệt để 100% bài toán kinh doanh của khách hàng kèm phân tích hiệu suất gia tăng vượt trội.<br>
+          2. <span style="color: #000000; font-weight: 700;">Đào tạo Xây dựng Business Case tài chính:</span> Giúp Phúc thành thạo việc chuyển đổi tính năng sản phẩm thành các con số tài chính cụ thể (Ví dụ: Tiết kiệm chi phí cơ hội, nhân sự, tăng năng suất). Chứng minh cho đối tác thấy mua gói đắt hơn thực chất lại là phương án tiết kiệm nhất dài hạn.<br>
+          3. <span style="color: #000000; font-weight: 700;">Thực hành kịch bản Upsell:</span> Tạo thói quen đưa ra các gói combo bổ sung hoặc điều khoản cam kết dài hạn có chiết khấu cao để nâng trị giá deal ngay khi thương lượng.
+        </div>
+      </div>
+    `;
+  } else {
+    feedbackHtml = `
+      <div style="display: flex; flex-direction: column; gap: 16px; font-size: 13.5px; line-height: 1.6; color: #000000;">
+        <div style="background: rgba(0, 111, 122, 0.04); padding: 16px; border-radius: 8px; border: 1px solid rgba(0, 111, 122, 0.15);">
+          <strong style="color: #006F7A; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="globe" style="width: 16px; height: 16px;"></i> Bức Tranh Tổng Thể (The Big Picture)
+          </strong>
+          Nhân sự mới sở hữu thái độ làm việc kỷ luật, chủ động học hỏi và tuân thủ chặt chẽ các chỉ thị của Leader. Tuy nhiên, họ đang gặp phải rào cản chung vô cùng phổ biến của sales mới vào nghề: <strong>hội chứng e ngại gọi điện tiếp cận và sợ bị từ chối sớm (Call Reluctance)</strong>. Vì thiếu tự tin vào kiến thức giải pháp và sợ các phản ứng gay gắt từ khách hàng lạ, nhân sự có xu hướng trì hoãn hoạt động tiếp cận chủ động, dẫn đến phễu hoạt động cực kỳ mỏng và không có đủ cơ hội cọ xát thực chiến để chuyển đổi.
+        </div>
+        
+        <div style="background: rgba(239, 68, 68, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.15);">
+          <strong style="color: #b91c1c; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="shield-alert" style="width: 16px; height: 16px;"></i> Điểm Nghẽn Hệ Thống (Bottleneck)
+          </strong>
+          Dung lượng phễu hoạt động ở đầu vào quá mỏng. Khi số lượng cuộc gọi tiếp tiếp cận ban đầu không đạt ngưỡng tối thiểu cần thiết để sàng lọc, doanh số cuối cùng chắc chắn sẽ bằng không. Sự rụt rè ở khâu thiết lập cuộc hẹn đang triệt tiêu hoàn toàn cơ hội phát huy năng lực tư vấn của nhân sự.
+        </div>
+
+        <div style="background: rgba(139, 92, 246, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.15);">
+          <strong style="color: #6d28d9; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="sliders" style="width: 16px; height: 16px;"></i> Định Hướng Chiến Lược Bán Hàng
+          </strong>
+          Thực thi chiến dịch <strong>"Outbound Speed-Sifting" (Sàng lọc nhanh đầu phễu)</strong>. Thay đổi tư duy từ "cố gắng bán hàng cho người không có nhu cầu" sang <strong>"nhanh chóng tìm ra người phù hợp nhất"</strong>. Khuyến khích nhân sự đối mặt và chấp nhận lời từ chối nhanh (Fail Fast) để tập trung thời gian vàng vào những cơ hội chất lượng cao. Rút ngắn mỗi cuộc gọi đầu tiên xuống dưới 2 phút, chỉ tập trung bán cuộc hẹn tiếp theo thay vì cố bán sản phẩm.
+        </div>
+
+        <div style="background: linear-gradient(135deg, rgba(20, 184, 166, 0.08) 0%, rgba(20, 184, 166, 0.15) 100%); padding: 18px 20px; border-radius: 10px; border-left: 5px solid #0d9488;">
+          <strong style="color: #006F7A; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+            <i data-lucide="trending-up" style="width: 18px; height: 18px;"></i> Action Plan Huấn Luyện Thực Chiến
+          </strong>
+          1. <span style="color: #000000; font-weight: 700;">Shadowing thực chiến bắt buộc:</span> Yêu cầu nhân sự tham gia dự thính trực tiếp tối thiểu 4 giờ/tuần các cuộc gọi outbound của Phan Ngọc Thúy và các buổi thương lượng deal lớn của Nguyễn Trọng Tín.<br>
+          2. <span style="color: #000000; font-weight: 700;">Luyện phản xạ xử lý từ chối đầu phễu:</span> Huấn luyện hàng ngày trước giờ làm việc bằng bộ Flashcards 10 kịch bản từ chối kinh điển ở cuộc gọi lạnh để tạo phản xạ ngôn ngữ nhanh, giảm nỗi sợ bị dập máy.<br>
+          3. <span style="color: #000000; font-weight: 700;">Hạn mức chỉ tiêu nghiêm ngặt:</span> Yêu cầu cam kết đạt tối thiểu 40 cuộc gọi tiếp cận khách hàng mỗi ngày để phá vỡ quán tính rụt rè và tích lũy số lượng nhằm đạt sự tự tin cần thiết.
+        </div>
+      </div>
+    `;
+  }
+  feedbackContainer.innerHTML = feedbackHtml;
+  
+  if (typeof lucide !== "undefined") {
+    lucide.createIcons();
+  }
+}
+
+window.updateAICoachDashboard = updateAICoachDashboard;
 window.editAIProject = editAIProject;
 window.deleteAIProject = deleteAIProject;
 window.openAddAIProjectModal = openAddAIProjectModal;
