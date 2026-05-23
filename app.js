@@ -155,7 +155,7 @@ async function loadDataFromGoogleSheets() {
         mapped.lien_he_cuoi = item.lien_he_cuoi || item["Liên hệ lần cuối"] || item["Lần cuối"] || "";
         mapped.dien_thoai = item.dien_thoai || item["Điện thoại"] || item["Số điện thoại"] || "";
         mapped.nguon = item.nguon || item["Nguồn khách hàng"] || item["Nguồn"] || "";
-        mapped.sales = cleanSalesperson(item.sales || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
+        mapped.sales = cleanSalesperson(item.sales || item["Người phụ trách"] || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
         mapped.moi_quan_he = item.moi_quan_he || item["Mối quan hệ"] || item["Giai đoạn"] || item["Trạng thái"] || "";
         return mapped;
       });
@@ -172,7 +172,7 @@ async function loadDataFromGoogleSheets() {
         mapped.nguon = item.nguon || item["Nguồn khách hàng"] || item["Nguồn"] || "";
         mapped.san_pham = item.san_pham || item["Tên sản phẩm"] || item["Sản phẩm"] || item["Dòng sản phẩm"] || "";
         mapped.ngay_mua = item.ngay_mua || item["Ngày mua hàng"] || item["Ngày mua"] || item["Ngày ký"] || item["Ngày đơn"] || "";
-        mapped.sales = cleanSalesperson(item.sales || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
+        mapped.sales = cleanSalesperson(item.sales || item["Người phụ trách"] || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
         
         let revenue = item.doanh_thu || item["Doanh thu"] || item["Giá trị"] || item["Số tiền"] || 0;
         if (typeof revenue === 'string') {
@@ -192,7 +192,7 @@ async function loadDataFromGoogleSheets() {
       newRenewals = data.map(item => {
         let mapped = {};
         mapped.ma_kh = item.ma_kh || item["Mã KH"] || item["Mã khách hàng"] || "";
-        mapped.sale_name = cleanSalesperson(item.sale_name || item["Sale hiện tại"] || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
+        mapped.sale_name = cleanSalesperson(item.sale_name || item["Người phụ trách"] || item["Sale hiện tại"] || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
         mapped.expiration_date = item.expiration_date || item["Ngày hết hạn"] || item["Hết hạn"] || "";
         mapped.activation_date = item.activation_date || item["Ngày kích hoạt"] || item["Ngày bắt đầu"] || "";
         mapped.status = item.status || item["Trạng thái"] || item["Tình trạng"] || "";
