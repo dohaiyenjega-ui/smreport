@@ -1281,9 +1281,20 @@ function updateKPIs() {
   }
 
   // Calculate and Render the fixed 4-level pacing cards
-  let refDate = new Date();
-  if (refDate.getFullYear() !== 2026) {
-    refDate = new Date(2026, 4, 21); // 21/05/2026
+  let activeRefDate = new Date();
+  if (activeRefDate.getFullYear() !== 2026) {
+    activeRefDate = new Date(2026, 4, 21); // Default to May 21st, 2026
+  }
+
+  // If date filters are set and activeRefDate is outside the filtered range,
+  // use fromDate as the reference date!
+  if (filterState.fromDate && filterState.toDate) {
+    const fromTime = filterState.fromDate.getTime();
+    const toTime = filterState.toDate.getTime();
+    const refTime = activeRefDate.getTime();
+    if (refTime < fromTime || refTime > toTime) {
+      activeRefDate = filterState.fromDate;
+    }
   }
 
   const pad = (n) => n.toString().padStart(2, '0');
@@ -1297,7 +1308,7 @@ function updateKPIs() {
   const yGap = yTarget - yActual;
 
   // 2. Quarter level
-  const qIndex = Math.floor(refDate.getMonth() / 3);
+  const qIndex = Math.floor(activeRefDate.getMonth() / 3);
   const qObj = commitmentQuarters.find(q => q.qIndex === qIndex) || { revenueRetail: 0, revenueBusiness: 0 };
   const qTarget = (qObj.revenueRetail || 0) + (qObj.revenueBusiness || 0);
   const qStartStr = `01/${pad(qIndex * 3 + 1)}/2026`;
@@ -1308,7 +1319,7 @@ function updateKPIs() {
   const qGap = qTarget - qActual;
 
   // 3. Month level
-  const mIndex = refDate.getMonth();
+  const mIndex = activeRefDate.getMonth();
   const mObj = commitmentMonths.find(m => m.monthIndex === mIndex) || { revenueRetail: 0, revenueBusiness: 0 };
   const mTarget = (mObj.revenueRetail || 0) + (mObj.revenueBusiness || 0);
   const mStartStr = `01/${pad(mIndex + 1)}/2026`;
@@ -1319,13 +1330,25 @@ function updateKPIs() {
   const mGap = mTarget - mActual;
 
   // 4. Week level
+  // If the filtered range is narrow (<= 8 days), we are filtering a specific week.
+  // Find the week that contains the start date (fromDate) of the filter.
+  // Otherwise, use activeRefDate.
+  let weekRefDate = activeRefDate;
+  if (filterState.fromDate && filterState.toDate) {
+    const diffTime = Math.abs(filterState.toDate.getTime() - filterState.fromDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays <= 8) {
+      weekRefDate = filterState.fromDate;
+    }
+  }
+
   const activeWeek = commitmentWeeks.find(w => {
     const start = parseDate(w.startDate);
     const end = parseDate(w.endDate);
     if (!start || !end) return false;
     const adjustedEnd = new Date(end);
     adjustedEnd.setHours(23, 59, 59, 999);
-    return refDate >= start && refDate <= adjustedEnd;
+    return weekRefDate >= start && weekRefDate <= adjustedEnd;
   });
   let wTarget = 0;
   let wActual = 0;
@@ -1833,11 +1856,22 @@ function updateCharts() {
   });
 
   // --- CHART 2: 4 PACING DOUGHNUT CHARTS (Manual targets) ---
-  let refDate = new Date();
-  if (refDate.getFullYear() !== 2026) {
-    refDate = new Date(2026, 4, 21); // 21/05/2026
+  let activeRefDate = new Date();
+  if (activeRefDate.getFullYear() !== 2026) {
+    activeRefDate = new Date(2026, 4, 21); // Default to May 21st, 2026
   }
-  const currentMonth = refDate.getMonth();
+
+  // If date filters are set and activeRefDate is outside the filtered range,
+  // use fromDate as the reference date!
+  if (filterState.fromDate && filterState.toDate) {
+    const fromTime = filterState.fromDate.getTime();
+    const toTime = filterState.toDate.getTime();
+    const refTime = activeRefDate.getTime();
+    if (refTime < fromTime || refTime > toTime) {
+      activeRefDate = filterState.fromDate;
+    }
+  }
+  const currentMonth = activeRefDate.getMonth();
   const qIndex = Math.floor(currentMonth / 3);
 
   // 1. Year targets & actuals
@@ -1873,13 +1907,22 @@ function updateCharts() {
   const monthActual = monthActuals.retail + monthActuals.go + monthActuals.business;
 
   // 4. Week targets & actuals
+  let weekRefDate = activeRefDate;
+  if (filterState.fromDate && filterState.toDate) {
+    const diffTime = Math.abs(filterState.toDate.getTime() - filterState.fromDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays <= 8) {
+      weekRefDate = filterState.fromDate;
+    }
+  }
+
   const activeWeekObj = commitmentWeeks.find(w => {
     const start = parseDate(w.startDate);
     const end = parseDate(w.endDate);
     if (!start || !end) return false;
     const adjustedEnd = new Date(end);
     adjustedEnd.setHours(23, 59, 59, 999);
-    return refDate >= start && refDate <= adjustedEnd;
+    return weekRefDate >= start && weekRefDate <= adjustedEnd;
   });
   
   let weekTarget = 0;
@@ -5435,31 +5478,130 @@ function getCommitmentActuals(startDateStr, endDateStr) {
 
   let actualRetail = 0, actualGo = 0, actualBusiness = 0;
   
-  filteredOrders.forEach(order => {
-    const d = parseDate(order.ngay_mua);
-    if (d && d >= start && d <= end) {
-      const line = getProductLine(order.san_pham);
-      if (line === "Retail") actualRetail += order.doanh_thu;
-      else if (line === "Go") actualGo += order.doanh_thu;
-      else if (line === "Business") actualBusiness += order.doanh_thu;
+  ordersData.forEach(order => {
+    // 1. Date Filter (ngay_mua) using start and end boundaries
+    const orderDate = parseDate(order.ngay_mua);
+    if (!orderDate || orderDate < start || orderDate > end) return;
+    
+    // 2. Salesperson Filter
+    if (filterState.sales !== "all" && order.sales !== filterState.sales) return;
+    
+    // 2.1 Global Product Group Filter for Orders
+    if (filterState.productGroup !== "all") {
+      const cat = getProductCategory(order.san_pham);
+      if (filterState.productGroup === "cloud" && cat !== "JEGA Cloud") return;
+      if (filterState.productGroup === "visual" && cat !== "JEGA Visual") return;
     }
+    
+    // 2.2 Global Product Line Filter for Orders
+    if (filterState.productLine !== "all") {
+      const line = getProductLine(order.san_pham);
+      if (line !== filterState.productLine) return;
+    }
+    
+    // 3. Product Group Category Filter
+    if (filterState.orderCategory !== "all") {
+      const cat = getProductCategory(order.san_pham);
+      if (filterState.orderCategory === "cloud" && cat !== "JEGA Cloud") return;
+      if (filterState.orderCategory === "visual" && cat !== "JEGA Visual") return;
+    }
+    
+    // 4. Order Type Filter (Ký mới vs Tái ký)
+    if (filterState.orderType !== "all" && order.loai_don !== filterState.orderType) return;
+    
+    // 5. Search Filter
+    if (filterState.searchOrders) {
+      const query = filterState.searchOrders.toLowerCase();
+      const matchName = order.ten_kh.toLowerCase().includes(query);
+      const matchId = order.ma_kh.toLowerCase().includes(query);
+      const matchPhone = order.dien_thoai.toLowerCase().includes(query);
+      const matchSource = order.nguon.toLowerCase().includes(query);
+      const matchProduct = order.san_pham.toLowerCase().includes(query);
+      if (!matchName && !matchId && !matchPhone && !matchSource && !matchProduct) return;
+    }
+    
+    const line = getProductLine(order.san_pham);
+    if (line === "Retail") actualRetail += order.doanh_thu;
+    else if (line === "Go") actualGo += order.doanh_thu;
+    else if (line === "Business") actualBusiness += order.doanh_thu;
   });
   
   let totalLeadsInPeriod = 0;
   let closedLeadsInPeriod = 0;
   let demoInPeriod = 0;
   
-  filteredLeads.forEach(lead => {
+  leadsData.forEach(lead => {
+    // 1. Date Filter (ngay_tao) using start and end boundaries
     const d = parseDate(lead.ngay_tao);
-    if (d && d >= start && d <= end) {
-      totalLeadsInPeriod++;
-      if (lead.moi_quan_he === "Ký hợp đồng") {
-        closedLeadsInPeriod++;
+    if (!d || d < start || d > end) return;
+    
+    // 2. Salesperson Filter
+    if (filterState.sales !== "all" && lead.sales !== filterState.sales) return;
+    
+    // 2.1 Global Product Group & Line filters for Leads (mapped via ordersData)
+    if (filterState.productGroup !== "all" || filterState.productLine !== "all") {
+      const leadOrders = ordersData.filter(o => o.ma_kh === lead.ma_kh);
+      if (leadOrders.length === 0) return;
+      
+      const matchesGroup = filterState.productGroup === "all" || leadOrders.some(o => {
+        const cat = getProductCategory(o.san_pham);
+        return (filterState.productGroup === "cloud" && cat === "JEGA Cloud") ||
+               (filterState.productGroup === "visual" && cat === "JEGA Visual");
+      });
+      
+      const matchesLine = filterState.productLine === "all" || leadOrders.some(o => getProductLine(o.san_pham) === filterState.productLine);
+      
+      if (!matchesGroup || !matchesLine) return;
+    }
+    
+    // 3. Lead Source Group Filter
+    if (filterState.leadSourceGroup !== "all") {
+      const grp = getLeadSourceGroup(lead.nguon);
+      if (filterState.leadSourceGroup === "sales" && grp !== "Sales") return;
+      if (filterState.leadSourceGroup === "mkt-hot" && grp !== "Marketing Nóng") return;
+      if (filterState.leadSourceGroup === "referral" && grp !== "Giới thiệu") return;
+      if (filterState.leadSourceGroup === "mkt-other" && grp !== "Marketing khác") return;
+    }
+    
+    // 4. Lead Relation Pipeline Filter
+    if (filterState.leadRelation !== "all") {
+      const rel = lead.moi_quan_he;
+      if (filterState.leadRelation === "New Lead") {
+        // All count
+      } else if (filterState.leadRelation === "Quan tâm") {
+        const list = ["Quan tâm", "Hẹn demo", "Demo", "Báo giá", "Dùng thử", "Gửi hợp đồng", "Đặt cọc", "Ký hợp đồng", "Thất bại"];
+        if (!list.includes(rel)) return;
+      } else if (filterState.leadRelation === "Demo") {
+        const list = ["Demo", "Báo giá", "Dùng thử", "Gửi hợp đồng", "Đặt cọc", "Ký hợp đồng", "Thất bại"];
+        if (!list.includes(rel)) return;
+      } else if (filterState.leadRelation === "Báo giá") {
+        const list = ["Báo giá", "Dùng thử", "Gửi hợp đồng", "Đặt cọc", "Ký hợp đồng", "Thất bại"];
+        if (!list.includes(rel)) return;
+      } else if (filterState.leadRelation === "Ký hợp đồng") {
+        if (rel !== "Ký hợp đồng") return;
+      } else if (filterState.leadRelation === "Rác") {
+        const list = ["Rác", "Thất bại", "Không tiếp cận được", "Nhu cầu xa", "Hẹn tư vấn sau"];
+        if (!list.includes(rel)) return;
       }
-      const demoList = ["Demo", "Báo giá", "Dùng thử", "Gửi hợp đồng", "Đặt cọc", "Ký hợp đồng"];
-      if (demoList.includes(lead.moi_quan_he)) {
-        demoInPeriod++;
-      }
+    }
+    
+    // 5. Search Filter
+    if (filterState.searchLeads) {
+      const query = filterState.searchLeads.toLowerCase();
+      const matchName = lead.ten_kh.toLowerCase().includes(query);
+      const matchId = lead.ma_kh.toLowerCase().includes(query);
+      const matchPhone = lead.dien_thoai.toLowerCase().includes(query);
+      const matchSource = lead.nguon.toLowerCase().includes(query);
+      if (!matchName && !matchId && !matchPhone && !matchSource) return;
+    }
+    
+    totalLeadsInPeriod++;
+    if (lead.moi_quan_he === "Ký hợp đồng") {
+      closedLeadsInPeriod++;
+    }
+    const demoList = ["Demo", "Báo giá", "Dùng thử", "Gửi hợp đồng", "Đặt cọc", "Ký hợp đồng"];
+    if (demoList.includes(lead.moi_quan_he)) {
+      demoInPeriod++;
     }
   });
   
@@ -6402,9 +6544,17 @@ function generateExecutiveReport() {
 
   const hotLeadsList = filteredLeads.filter(l => getLeadSourceGroup(l.nguon) === "Marketing Nóng");
   
-  let refDate = new Date();
-  if (refDate.getFullYear() !== 2026) refDate = new Date(2026, 4, 21);
-  const currentMonth = refDate.getMonth();
+  let activeRefDate = new Date();
+  if (activeRefDate.getFullYear() !== 2026) activeRefDate = new Date(2026, 4, 21);
+  if (filterState.fromDate && filterState.toDate) {
+    const fromTime = filterState.fromDate.getTime();
+    const toTime = filterState.toDate.getTime();
+    const refTime = activeRefDate.getTime();
+    if (refTime < fromTime || refTime > toTime) {
+      activeRefDate = filterState.fromDate;
+    }
+  }
+  const currentMonth = activeRefDate.getMonth();
   const qIndex = Math.floor(currentMonth / 3);
 
   const yObj = commitmentYears[0] || { revenueRetail: 0, revenueBusiness: 0 };
@@ -6427,13 +6577,22 @@ function generateExecutiveReport() {
   const monthActuals = getCommitmentActuals(mStartStr, mEndStr);
   const monthActual = monthActuals.retail + monthActuals.go + monthActuals.business;
 
+  let weekRefDate = activeRefDate;
+  if (filterState.fromDate && filterState.toDate) {
+    const diffTime = Math.abs(filterState.toDate.getTime() - filterState.fromDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays <= 8) {
+      weekRefDate = filterState.fromDate;
+    }
+  }
+
   const activeWeekObj = commitmentWeeks.find(w => {
     const start = parseDate(w.startDate);
     const end = parseDate(w.endDate);
     if (!start || !end) return false;
     const adjustedEnd = new Date(end);
     adjustedEnd.setHours(23, 59, 59, 999);
-    return refDate >= start && refDate <= adjustedEnd;
+    return weekRefDate >= start && weekRefDate <= adjustedEnd;
   });
   
   let weekTarget = activeWeekObj ? (activeWeekObj.revenueRetail || 0) + (activeWeekObj.revenueBusiness || 0) : monthTarget;
