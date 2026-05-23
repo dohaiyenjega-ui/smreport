@@ -234,24 +234,21 @@ async function loadDataFromGoogleSheets() {
       let data = await fetchCSV(getGoogleSheetExportUrl(perfUrl));
       newPerf = data.map(item => {
         let keys = Object.keys(item);
-        let startDateKey = keys.find(k => k.toLowerCase().includes("startdate") || k.toLowerCase().includes("ngày bắt đầu") || k.toLowerCase().includes("từ ngày")) || keys[1] || "";
-        let endDateKey = keys.find(k => k.toLowerCase().includes("enddate") || k.toLowerCase().includes("ngày kết thúc") || k.toLowerCase().includes("đến ngày")) || keys[2] || "";
-        let metricKey = keys.find(k => k.toLowerCase().includes("metric") || k.toLowerCase().includes("chỉ tiêu") || k.toLowerCase().includes("loại")) || keys[3] || "";
         
         let mapped = {
-          startDate: item[startDateKey] || "",
-          endDate: item[endDateKey] || "",
-          metric: item[metricKey] || "",
+          startDate: item[keys[1]] || "",
+          endDate: item[keys[2]] || "",
+          metric: item[keys[3]] || "",
           values: {}
         };
         
         const salesReps = ["Lê Thị Hoài Phúc", "Nguyễn Trọng Tín", "Phan Ngọc Thúy", "Đỗ Thị Hải Yến", "Võ Gia Hân"];
         salesReps.forEach(rep => {
-          let repKey = keys.find(k => k.toLowerCase().includes(rep.toLowerCase()));
+          let repKey = keys.find(k => k && k.trim().toLowerCase() === rep.toLowerCase());
           if (repKey) {
             let val = item[repKey];
             if (typeof val === 'string') {
-              val = Number(val.replace(/[^0-9.-]+/g,""));
+              val = Number(val.replace(/[^0-9-]/g,""));
             } else {
               val = Number(val);
             }
