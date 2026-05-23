@@ -123,44 +123,116 @@ async function loadDataFromGoogleSheets() {
   let originalBtnText = btn ? btn.innerHTML : '';
   if (btn) btn.innerHTML = '<i data-lucide="loader" class="spin" style="margin-right: 6px; width: 18px; display: inline-block; vertical-align: middle;"></i> <span style="vertical-align: middle;">Đang tải dữ liệu...</span>';
 
+  const EMAIL_MAP = {
+    "tinnt@jega.asia": "Nguyễn Trọng Tín",
+    "yendth@jega.asia": "Đỗ Thị Hải Yến",
+    "phuclth@jega.asia": "Lê Thị Hoài Phúc",
+    "thuypn@jega.asia": "Phan Ngọc Thúy",
+    "hanvg@jega.asia": "Võ Gia Hân"
+  };
+
+  function cleanSalesperson(val) {
+    if (!val) return "Chưa phân phối";
+    val = String(val).trim();
+    if (EMAIL_MAP[val.toLowerCase()]) {
+      return EMAIL_MAP[val.toLowerCase()];
+    }
+    if (val.includes("@")) {
+      let emailPart = val.split("@")[0];
+      return emailPart.replace(".", " ").replace(/(^\w|\s\w)/g, m => m.toUpperCase());
+    }
+    return val;
+  }
+
   try {
     if (leadsUrl && getGoogleSheetExportUrl(leadsUrl)) {
       let data = await fetchCSV(getGoogleSheetExportUrl(leadsUrl));
       newLeads = data.map(item => {
-        item.ma_kh = item.ma_kh || item["Mã KH"] || item["Mã khách hàng"];
-        item.moi_quan_he = item.moi_quan_he || item["Mối quan hệ"] || item["Giai đoạn"];
-        return item;
+        let mapped = {};
+        mapped.ma_kh = item.ma_kh || item["Mã KH"] || item["Mã khách hàng"] || "";
+        mapped.ten_kh = item.ten_kh || item["Tên khách hàng"] || item["Tên KH"] || "";
+        mapped.ngay_tao = item.ngay_tao || item["Ngày tạo khách hàng"] || item["Ngày tạo"] || "";
+        mapped.lien_he_cuoi = item.lien_he_cuoi || item["Liên hệ lần cuối"] || item["Lần cuối"] || "";
+        mapped.dien_thoai = item.dien_thoai || item["Điện thoại"] || item["Số điện thoại"] || "";
+        mapped.nguon = item.nguon || item["Nguồn khách hàng"] || item["Nguồn"] || "";
+        mapped.sales = cleanSalesperson(item.sales || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
+        mapped.moi_quan_he = item.moi_quan_he || item["Mối quan hệ"] || item["Giai đoạn"] || item["Trạng thái"] || "";
+        return mapped;
       });
       hasCustomData = true;
     }
     if (ordersUrl && getGoogleSheetExportUrl(ordersUrl)) {
       let data = await fetchCSV(getGoogleSheetExportUrl(ordersUrl));
       newOrders = data.map(item => {
-        item.ma_kh = item.ma_kh || item["Mã KH"] || item["Mã khách hàng"];
-        item.ma_don_hang = item.ma_don_hang || item["Mã đơn hàng"] || item["Mã đơn"];
-        item.san_pham = item.san_pham || item["Sản phẩm"];
-        item.ngay_mua = item.ngay_mua || item["Ngày mua"] || item["Ngày ký"];
-        item.doanh_thu = item.doanh_thu || item["Doanh thu"] || item["Giá trị"];
-        if (typeof item.doanh_thu === 'string') item.doanh_thu = Number(item.doanh_thu.replace(/[^0-9.-]+/g,""));
-        return item;
+        let mapped = {};
+        mapped.ma_kh = item.ma_kh || item["Mã KH"] || item["Mã khách hàng"] || "";
+        mapped.ma_don_hang = item.ma_don_hang || item["Mã đơn hàng"] || item["Mã đơn"] || "";
+        mapped.ten_kh = item.ten_kh || item["Tên KH"] || item["Tên khách hàng"] || "";
+        mapped.dien_thoai = item.dien_thoai || item["Số ĐT"] || item["Số điện thoại"] || item["Điện thoại"] || "";
+        mapped.nguon = item.nguon || item["Nguồn khách hàng"] || item["Nguồn"] || "";
+        mapped.san_pham = item.san_pham || item["Tên sản phẩm"] || item["Sản phẩm"] || item["Dòng sản phẩm"] || "";
+        mapped.ngay_mua = item.ngay_mua || item["Ngày mua hàng"] || item["Ngày mua"] || item["Ngày ký"] || item["Ngày đơn"] || "";
+        mapped.sales = cleanSalesperson(item.sales || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
+        
+        let revenue = item.doanh_thu || item["Doanh thu"] || item["Giá trị"] || item["Số tiền"] || 0;
+        if (typeof revenue === 'string') {
+          revenue = Number(revenue.replace(/[^0-9.-]+/g,""));
+        } else {
+          revenue = Number(revenue);
+        }
+        mapped.doanh_thu = isNaN(revenue) ? 0 : revenue;
+        
+        mapped.loai_don = item.loai_don || item["Loại đơn hàng"] || item["Loại đơn"] || item["Phân loại đơn"] || "";
+        return mapped;
       });
       hasCustomData = true;
     }
     if (renewalsUrl && getGoogleSheetExportUrl(renewalsUrl)) {
       let data = await fetchCSV(getGoogleSheetExportUrl(renewalsUrl));
       newRenewals = data.map(item => {
-        item.sale_name = item.sale_name || item["Sale hiện tại"] || item["Nhân viên kinh doanh"] || item["Sales"];
-        item.expiration_date = item.expiration_date || item["Ngày hết hạn"] || item["Hết hạn"];
-        item.activation_date = item.activation_date || item["Ngày kích hoạt"] || item["Ngày bắt đầu"];
-        item.status = item.status || item["Trạng thái"] || item["Tình trạng"];
-        item.reason = item.reason || item["Lý do không tái ký"] || item["Lý do"];
-        item.ma_kh = item.ma_kh || item["Mã KH"] || item["Mã khách hàng"];
-        return item;
+        let mapped = {};
+        mapped.ma_kh = item.ma_kh || item["Mã KH"] || item["Mã khách hàng"] || "";
+        mapped.sale_name = cleanSalesperson(item.sale_name || item["Sale hiện tại"] || item["Nhân viên kinh doanh"] || item["Sales"] || item["Nhân sự"] || "");
+        mapped.expiration_date = item.expiration_date || item["Ngày hết hạn"] || item["Hết hạn"] || "";
+        mapped.activation_date = item.activation_date || item["Ngày kích hoạt"] || item["Ngày bắt đầu"] || "";
+        mapped.status = item.status || item["Trạng thái"] || item["Tình trạng"] || "";
+        mapped.reason = item.reason || item["Lý do không tái ký"] || item["Lý do"] || "";
+        return mapped;
       });
       hasCustomData = true;
     }
     if (perfUrl && getGoogleSheetExportUrl(perfUrl)) {
-      newPerf = await fetchCSV(getGoogleSheetExportUrl(perfUrl));
+      let data = await fetchCSV(getGoogleSheetExportUrl(perfUrl));
+      newPerf = data.map(item => {
+        let keys = Object.keys(item);
+        let startDateKey = keys.find(k => k.toLowerCase().includes("startdate") || k.toLowerCase().includes("ngày bắt đầu") || k.toLowerCase().includes("từ ngày")) || keys[1] || "";
+        let endDateKey = keys.find(k => k.toLowerCase().includes("enddate") || k.toLowerCase().includes("ngày kết thúc") || k.toLowerCase().includes("đến ngày")) || keys[2] || "";
+        let metricKey = keys.find(k => k.toLowerCase().includes("metric") || k.toLowerCase().includes("chỉ tiêu") || k.toLowerCase().includes("loại")) || keys[3] || "";
+        
+        let mapped = {
+          startDate: item[startDateKey] || "",
+          endDate: item[endDateKey] || "",
+          metric: item[metricKey] || "",
+          values: {}
+        };
+        
+        const salesReps = ["Lê Thị Hoài Phúc", "Nguyễn Trọng Tín", "Phan Ngọc Thúy", "Đỗ Thị Hải Yến", "Võ Gia Hân"];
+        salesReps.forEach(rep => {
+          let repKey = keys.find(k => k.toLowerCase().includes(rep.toLowerCase()));
+          if (repKey) {
+            let val = item[repKey];
+            if (typeof val === 'string') {
+              val = Number(val.replace(/[^0-9.-]+/g,""));
+            } else {
+              val = Number(val);
+            }
+            mapped.values[rep] = isNaN(val) ? 0 : val;
+          } else {
+            mapped.values[rep] = 0;
+          }
+        });
+        return mapped;
+      });
       performanceData = newPerf;
       hasCustomData = true;
     }
