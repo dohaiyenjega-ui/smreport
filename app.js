@@ -98,6 +98,26 @@ function fetchCSV(url) {
 }
 
 async function loadDataFromGoogleSheets() {
+  // Default fallback URLs provided by user
+  const DEFAULT_LEADS = 'https://docs.google.com/spreadsheets/d/1peLiU9RkmA34lIQCer4X6Uc95sP6PKgblr6BnSo80H8/edit?gid=0#gid=0';
+  const DEFAULT_ORDERS = 'https://docs.google.com/spreadsheets/d/1peLiU9RkmA34lIQCer4X6Uc95sP6PKgblr6BnSo80H8/edit?gid=1920782595#gid=1920782595';
+  const DEFAULT_RENEWALS = 'https://docs.google.com/spreadsheets/d/1peLiU9RkmA34lIQCer4X6Uc95sP6PKgblr6BnSo80H8/edit?gid=999543652#gid=999543652';
+  const DEFAULT_PERFORMANCE = 'https://docs.google.com/spreadsheets/d/1peLiU9RkmA34lIQCer4X6Uc95sP6PKgblr6BnSo80H8/edit?gid=1045097297#gid=1045097297';
+
+  // Initialize localStorage G_SHEET_* keys if empty
+  if (localStorage.getItem('G_SHEET_LEADS') === null) {
+    localStorage.setItem('G_SHEET_LEADS', DEFAULT_LEADS);
+  }
+  if (localStorage.getItem('G_SHEET_ORDERS') === null) {
+    localStorage.setItem('G_SHEET_ORDERS', DEFAULT_ORDERS);
+  }
+  if (localStorage.getItem('G_SHEET_RENEWALS') === null) {
+    localStorage.setItem('G_SHEET_RENEWALS', DEFAULT_RENEWALS);
+  }
+  if (localStorage.getItem('G_SHEET_PERFORMANCE') === null) {
+    localStorage.setItem('G_SHEET_PERFORMANCE', DEFAULT_PERFORMANCE);
+  }
+
   const leadsUrl = localStorage.getItem('G_SHEET_LEADS') || '';
   const ordersUrl = localStorage.getItem('G_SHEET_ORDERS') || '';
   const renewalsUrl = localStorage.getItem('G_SHEET_RENEWALS') || '';
