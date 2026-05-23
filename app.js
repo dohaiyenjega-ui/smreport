@@ -1184,7 +1184,7 @@ function getCommitmentRevenueForPeriod(startDate, endDate) {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
   if (diffDays <= 8) {
-    // 1. Week level
+    // 1. Week level lookup
     const activeWeek = commitmentWeeks.find(w => {
       const wStart = parseDate(w.startDate);
       const wEnd = parseDate(w.endDate);
@@ -1196,30 +1196,34 @@ function getCommitmentRevenueForPeriod(startDate, endDate) {
     if (activeWeek) {
       return (activeWeek.revenueRetail || 0) + (activeWeek.revenueBusiness || 0);
     }
-    // Fallback if not found: find by month index of start date
-    const mIndex = start.getMonth();
-    const weeksInMonth = commitmentWeeks.filter(w => w.monthIndex === mIndex);
-    if (weeksInMonth.length > 0) {
-      const avgRetail = weeksInMonth.reduce((s, w) => s + (w.revenueRetail || 0), 0) / weeksInMonth.length;
-      const avgBusiness = weeksInMonth.reduce((s, w) => s + (w.revenueBusiness || 0), 0) / weeksInMonth.length;
-      return avgRetail + avgBusiness;
-    }
-    return 0;
-  } else if (diffDays <= 35) {
-    // 2. Month level
-    const mIndex = start.getMonth();
-    const mObj = commitmentMonths.find(m => m.monthIndex === mIndex);
-    return mObj ? (mObj.revenueRetail || 0) + (mObj.revenueBusiness || 0) : 0;
-  } else if (diffDays <= 100) {
-    // 3. Quarter level
-    const qIndex = Math.floor(start.getMonth() / 3);
-    const qObj = commitmentQuarters.find(q => q.qIndex === qIndex);
-    return qObj ? (qObj.revenueRetail || 0) + (qObj.revenueBusiness || 0) : 0;
-  } else {
-    // 4. Year level
-    const yObj = commitmentYears[0] || { revenueRetail: 0, revenueBusiness: 0 };
-    return (yObj.revenueRetail || 0) + (yObj.revenueBusiness || 0);
   }
+
+  // 2. Custom or Multi-Month level: daily pro-rata sum of monthly commitments
+  let totalCommitment = 0;
+  
+  // Clone start date to iterate day by day
+  let current = new Date(start);
+  const targetEnd = new Date(end);
+  targetEnd.setHours(23, 59, 59, 999);
+  
+  // Pre-calculate daily rates for all 12 months using live commitmentMonths values
+  const monthlyDailyRates = {};
+  for (let mIndex = 0; mIndex < 12; mIndex++) {
+    const mObj = commitmentMonths.find(m => m.monthIndex === mIndex);
+    const mComm = mObj ? (mObj.revenueRetail || 0) + (mObj.revenueBusiness || 0) : 0;
+    const daysInMonth = new Date(2026, mIndex + 1, 0).getDate();
+    monthlyDailyRates[mIndex] = mComm / daysInMonth;
+  }
+  
+  while (current <= targetEnd) {
+    if (current.getFullYear() === 2026) {
+      const mIndex = current.getMonth();
+      totalCommitment += monthlyDailyRates[mIndex] || 0;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return Math.round(totalCommitment);
 }
 
 // Format trend HTML comparison
